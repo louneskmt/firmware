@@ -34,9 +34,21 @@ cases = [
     "",
     "850dd556283b49d80fa5501035b4775e62f0c80bf36f62d1adf2f2f9f108c884",
     "534c00190001a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad57070002483045022100c0dc28bb563fc5fea76cacff75dba9cb4122412faae01937cdebccfb065f9a7002202e980bfbd8a434a7fc4cd2ca49da476ce98ca097437f8159b1a386b41fcdfac50121032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b"
+),
+(
+    "all all all all all all all all all all all all",
+    "",
+    "0a115a171e30f8a740bae6c4144bec5dc1099ffa79b83dfb8aa3501d094de585",
+    "m/49'/0'/0'/1/0",
+    "a914b9ddc52a7d95ad46d474bfc7186d0150e15a499187",
+    True,
+    "TREZOR",
+    "99948a0deedcce74adf30102254643247309df3c8f643ad45b270a27ca7ecc9d",
+    "534c0019000192caf0b8daf78f1d388dbbceaec34bd2dabc31b217e32343663667f6694a3f4617160014e0cffbee1925a411844f44c3b8d81365ab51d036024730440220484072ca317663dd685d372115a9d2ff43d9afc6d352c10445a94e555e12154602202d3ffee5f780dbc74e67fcc4bcbc75a9816ed00df1142d571014724af9959355012103a961687895a78da9aef98eed8e1f2a3e91cfb69d2f3cf11cbd0bb1773d951928"
 )
 ]
 
+print('----')
 for seed, passphrase, ownership_key, path, script_pubkey, user_confirmation, commitment_data, sighash, proof_of_ownership in cases:
     master_seed = bip39.master_secret(seed, passphrase)
 
@@ -49,8 +61,11 @@ for seed, passphrase, ownership_key, path, script_pubkey, user_confirmation, com
     ownership_ids = [ownership_id]
 
     proof_body = ownership.slip19_compile_proof_body(ownership_ids, user_confirmation)
+    print(b2a_hex(proof_body))
     proof_footer = ownership.slip19_compile_proof_footer(a2b_hex(script_pubkey), a2b_hex(b2a_hex(commitment_data)))
+    print(b2a_hex(proof_footer))
     got_sighash = ownership.slip19_compile_sighash(proof_body, proof_footer)
 
     got_sighash_str = b2a_hex(got_sighash).decode('utf-8')
+    print(got_sighash_str)
     assert got_sighash_str == sighash
