@@ -81,7 +81,7 @@ def test_public(sim_execfile):
 
             count += 1
             print("OK: %s" % ln)
-            
+
 
     assert count > 12
 
@@ -129,6 +129,14 @@ def test_clear_seed(unit_test):
 def test_slip132(unit_test):
     # slip132 ?pub stuff
     unit_test('devtest/unit_slip132.py')
+
+def test_slip19(unit_test):
+    # slip19 unit tests
+    unit_test('devtest/unit_slip19.py')
+
+def test_slip21(unit_test):
+    # slip21 unit tests
+    unit_test('devtest/unit_slip21.py')
 
 def test_multisig(unit_test):
     # scripts/multisig unit tests
@@ -235,14 +243,14 @@ def test_cleanup_deriv_path_fails(path, ans, sim_exec, star=True):
 
     assert 'Traceback' in rv
     assert ans in rv
-    
+
 
 @pytest.mark.parametrize('patterns, paths, answers', [
     (["m"], ("m", "m/2", "*", "any"), [True, False, False, False]),
     (["any"], ("m", "m/2", "*", "1/2/3/4/5/6'/55'"), [True]*4),
-    (["m/1", "m/2/*'"], ("m", "m/1", "m/3/4", "m/2/4'", "m/2/4"), 
+    (["m/1", "m/2/*'"], ("m", "m/1", "m/3/4", "m/2/4'", "m/2/4"),
                         [0,    1,    0,       1,        0]),
-    (["m/1/*", "m/2/*'"], ("m/1/2", "m/1/2'", "m/2/1", "m/2/1'"), 
+    (["m/1/*", "m/2/*'"], ("m/1/2", "m/1/2'", "m/2/1", "m/2/1'"),
                            [1,       0,       0,       1]),
 ])
 def test_match_deriv_path(patterns, paths, answers, sim_exec):
