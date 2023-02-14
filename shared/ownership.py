@@ -2,6 +2,7 @@
 # ownership.py - Proof of Ownership (SLIP-0019)
 #
 import ngu
+from serializations import ser_compact_size
 
 # SLIP-0021 - Symmetric Key Derivation for HD Wallets
 # See https://github.com/satoshilabs/slips/blob/master/slip-0021.md
@@ -63,7 +64,7 @@ def slip19_compile_proof_body(ownership_ids, user_confirmation):
     flags = (uc_bit << 0) | (reserved_bits[0] << 1) | (reserved_bits[1] << 2) | (reserved_bits[2] << 3) | (reserved_bits[3] << 4) | (reserved_bits[4] << 5) | (reserved_bits[5] << 6) | (reserved_bits[6] << 7)
     flag_byte = bytes([flags])
 
-    n = encode_varint(len(ownership_ids))
+    n = ser_compact_size(len(ownership_ids))
     ids = b''.join(ownership_ids)
 
     return SLIP19_VERSION_MAGIC + flag_byte + n + ids
@@ -78,26 +79,4 @@ def slip19_compile_sighash(proof_body, proof_footer):
 
 # Utils
 def length_prefixed_bytes(data):
-    return encode_varint(len(data)) + data
-
-def encode_varint(number):
-    if number == 0:
-        return b'\x00'
-    if number < 0:
-        raise ValueError("number must be non-negative")
-    result = bytearray()
-    while number > 0:
-        result.append(number & 0x7f | 0x80)
-        number >>= 7
-    result[-1] &= 0x7f
-    return bytes(result)
-
-def decode_varint(encoded):
-    result = 0
-    shift = 0
-    for b in encoded:
-        result |= (b & 0x7f) << shift
-        shift += 7
-        if not (b & 0x80):
-            break
-    return result
+    return ser_compact_size(len(data)) + data

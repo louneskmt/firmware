@@ -9,6 +9,7 @@ import bip39
 import ownership
 from ubinascii import hexlify as b2a_hex
 from ubinascii import unhexlify as a2b_hex
+import seed
 
 """
 (
@@ -49,8 +50,11 @@ cases = [
 ]
 
 print('----')
-for seed, passphrase, ownership_key, path, script_pubkey, user_confirmation, commitment_data, sighash, proof_of_ownership in cases:
-    master_seed = bip39.master_secret(seed, passphrase)
+for words, passphrase, ownership_key, path, script_pubkey, user_confirmation, commitment_data, sighash, proof_of_ownership in cases:
+    seed.set_seed_value(words)
+    seed.set_bip39_passphrase(passphrase)
+
+    master_seed = bip39.master_secret(words, passphrase)
 
     got_ownership_key = ownership.slip19_ownership_key(master_seed)
 
