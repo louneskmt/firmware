@@ -81,24 +81,24 @@ def slip19_compile_sighash(proof_body, proof_footer):
 def slip19_sign_proof(node, addr_fmt, sighash):
     # Sign a SLIP-0019 proof of ownership.
 
-    keyhash = ngu.hash.hash160(node.pubkey())
-    if addr_fmt == AF_CLASSIC:
-        script_pubkey =  b'\x76\xA9\x14' + keyhash + b'\x88\xAC'
-    elif addr_fmt == AF_P2WPKH_P2SH:
-        redeem_script = b'\x00\x14' + keyhash
-        scriptsig = length_prefixed_bytes(redeem_script)
-        scripthash = ngu.hash.hash160(redeem_script)
-        script_pubkey = b'\xA9\x14' + scripthash + b'\x87'
-    elif addr_fmt == AF_P2WPKH:
-        script_pubkey = b'\x00\x14' + keyhash
-        scriptsig = b''
-
     sig = ngu.secp256k1.sign(node.privkey(), sighash, 0).to_bytes()
     r = sig[1:33]
     s = sig[33:65]
     der_sig = ser_sig_der(r, s, SIGHASH_ALL)
 
-    return length_prefixed_bytes(scriptsig) + b'\x02' + length_prefixed_bytes(der_sig) + length_prefixed_bytes(node.pubkey())
+    keyhash = ngu.hash.hash160(node.pubkey())
+    if addr_fmt == AF_CLASSIC:
+        scriptsig = length_prefixed_bytes(der_sig) + length_prefixed_bytes(node.pubkey())
+        witness = b'\x00'
+    elif addr_fmt == AF_P2WPKH_P2SH:
+        redeem_script = b'\x00\x14' + keyhash
+        scriptsig = length_prefixed_bytes(redeem_script)
+        witness = b'\x02' + length_prefixed_bytes(der_sig) + length_prefixed_bytes(node.pubkey())
+    elif addr_fmt == AF_P2WPKH:
+        scriptsig = b''
+        witness = b'\x02' + length_prefixed_bytes(der_sig) + length_prefixed_bytes(node.pubkey())
+
+    return length_prefixed_bytes(scriptsig) + witness
 
 # Utils
 def length_prefixed_bytes(data):
