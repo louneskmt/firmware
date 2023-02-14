@@ -9,7 +9,8 @@ import bip39
 import ownership
 from ubinascii import hexlify as b2a_hex
 from ubinascii import unhexlify as a2b_hex
-import seed
+import stash, seed
+from chains import AF_P2WPKH, AF_P2WPKH_P2SH
 
 """
 (
@@ -29,6 +30,7 @@ cases = [
     "all all all all all all all all all all all all",
     "",
     "0a115a171e30f8a740bae6c4144bec5dc1099ffa79b83dfb8aa3501d094de585",
+    AF_P2WPKH,
     "m/84'/0'/0'/1/0",
     "0014b2f771c370ccf219cd3059cda92bdf7f00cf2103",
     False,
@@ -40,6 +42,7 @@ cases = [
     "all all all all all all all all all all all all",
     "",
     "0a115a171e30f8a740bae6c4144bec5dc1099ffa79b83dfb8aa3501d094de585",
+    AF_P2WPKH_P2SH,
     "m/49'/0'/0'/1/0",
     "a914b9ddc52a7d95ad46d474bfc7186d0150e15a499187",
     True,
@@ -50,7 +53,7 @@ cases = [
 ]
 
 print('----')
-for words, passphrase, ownership_key, path, script_pubkey, user_confirmation, commitment_data, sighash, proof_of_ownership in cases:
+for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confirmation, commitment_data, sighash, proof_of_ownership in cases:
     seed.set_seed_value(words)
     seed.set_bip39_passphrase(passphrase)
 
@@ -70,3 +73,11 @@ for words, passphrase, ownership_key, path, script_pubkey, user_confirmation, co
 
     got_sighash_str = b2a_hex(got_sighash).decode('utf-8')
     assert got_sighash_str == sighash
+
+    with stash.SensitiveValues() as sv:
+        node = sv.derive_path(path)
+        proof_signature = ownership.slip19_sign_proof(node, addr_fmt, got_sighash)
+        got_full_body = proof_body + proof_signature
+
+        got_proof_of_ownership = b2a_hex(got_full_body).decode('utf-8')
+        assert got_proof_of_ownership == proof_of_ownership

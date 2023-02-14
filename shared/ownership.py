@@ -2,7 +2,8 @@
 # ownership.py - Proof of Ownership (SLIP-0019)
 #
 import ngu
-from serializations import ser_compact_size
+from serializations import ser_compact_size, ser_sig_der, SIGHASH_ALL
+from chains import AF_P2WPKH, AF_CLASSIC, AF_P2WPKH_P2SH, AF_P2WSH
 
 # SLIP-0021 - Symmetric Key Derivation for HD Wallets
 # See https://github.com/satoshilabs/slips/blob/master/slip-0021.md
@@ -76,6 +77,28 @@ def slip19_compile_proof_footer(script_pubkey, commitment_data):
 def slip19_compile_sighash(proof_body, proof_footer):
     # Compile the sighash of a SLIP-0019 proof of ownership.
     return ngu.hash.sha256s(proof_body + proof_footer)
+
+def slip19_sign_proof(node, addr_fmt, sighash):
+    # Sign a SLIP-0019 proof of ownership.
+
+    keyhash = ngu.hash.hash160(node.pubkey())
+    if addr_fmt == AF_CLASSIC:
+        script_pubkey =  b'\x76\xA9\x14' + keyhash + b'\x88\xAC'
+    elif addr_fmt == AF_P2WPKH_P2SH:
+        redeem_script = b'\x00\x14' + keyhash
+        scriptsig = length_prefixed_bytes(redeem_script)
+        scripthash = ngu.hash.hash160(redeem_script)
+        script_pubkey = b'\xA9\x14' + scripthash + b'\x87'
+    elif addr_fmt == AF_P2WPKH:
+        script_pubkey = b'\x00\x14' + keyhash
+        scriptsig = b''
+
+    sig = ngu.secp256k1.sign(node.privkey(), sighash, 0).to_bytes()
+    r = sig[1:33]
+    s = sig[33:65]
+    der_sig = ser_sig_der(r, s, SIGHASH_ALL)
+
+    return length_prefixed_bytes(scriptsig) + b'\x02' + length_prefixed_bytes(der_sig) + length_prefixed_bytes(node.pubkey())
 
 # Utils
 def length_prefixed_bytes(data):
