@@ -43,8 +43,8 @@ cases = [
     "a914b9ddc52a7d95ad46d474bfc7186d0150e15a499187",
     True,
     "TREZOR",
-    "99948a0deedcce74adf30102254643247309df3c8f643ad45b270a27ca7ecc9d",
-    "534c0019000192caf0b8daf78f1d388dbbceaec34bd2dabc31b217e32343663667f6694a3f4617160014e0cffbee1925a411844f44c3b8d81365ab51d036024730440220484072ca317663dd685d372115a9d2ff43d9afc6d352c10445a94e555e12154602202d3ffee5f780dbc74e67fcc4bcbc75a9816ed00df1142d571014724af9959355012103a961687895a78da9aef98eed8e1f2a3e91cfb69d2f3cf11cbd0bb1773d951928"
+    "709fa3a60709cecefbd7aaaf551ff23421d65d1c046e6a9390abf73cbcd2fc83",
+    "534c0019010192caf0b8daf78f1d388dbbceaec34bd2dabc31b217e32343663667f6694a3f4617160014e0cffbee1925a411844f44c3b8d81365ab51d0360247304402207f1003c59661ddf564af2e10d19ad8d6a1a47ad30e7052197d95fd65d186a67802205f0a804509980fec1b063554aadd8fb871d7c9fe934087cba2da09cbeff8531c012103a961687895a78da9aef98eed8e1f2a3e91cfb69d2f3cf11cbd0bb1773d951928"
 )
 ]
 
@@ -61,11 +61,8 @@ for seed, passphrase, ownership_key, path, script_pubkey, user_confirmation, com
     ownership_ids = [ownership_id]
 
     proof_body = ownership.slip19_compile_proof_body(ownership_ids, user_confirmation)
-    print(b2a_hex(proof_body))
     proof_footer = ownership.slip19_compile_proof_footer(a2b_hex(script_pubkey), a2b_hex(b2a_hex(commitment_data)))
-    print(b2a_hex(proof_footer))
     got_sighash = ownership.slip19_compile_sighash(proof_body, proof_footer)
 
     got_sighash_str = b2a_hex(got_sighash).decode('utf-8')
-    print(got_sighash_str)
     assert got_sighash_str == sighash
