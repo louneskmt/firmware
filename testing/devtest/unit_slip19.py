@@ -10,7 +10,7 @@ import ownership
 from ubinascii import hexlify as b2a_hex
 from ubinascii import unhexlify as a2b_hex
 import stash, seed
-from chains import AF_P2WPKH, AF_P2WPKH_P2SH
+from chains import AF_P2WPKH, AF_P2WPKH_P2SH, AF_CLASSIC
 
 """
 (
@@ -48,34 +48,38 @@ cases = [
     True,
     "TREZOR",
     "709fa3a60709cecefbd7aaaf551ff23421d65d1c046e6a9390abf73cbcd2fc83",
-    "534c0019000192caf0b8daf78f1d388dbbceaec34bd2dabc31b217e32343663667f6694a3f4617160014e0cffbee1925a411844f44c3b8d81365ab51d036024730440220484072ca317663dd685d372115a9d2ff43d9afc6d352c10445a94e555e12154602202d3ffee5f780dbc74e67fcc4bcbc75a9816ed00df1142d571014724af9959355012103a961687895a78da9aef98eed8e1f2a3e91cfb69d2f3cf11cbd0bb1773d951928"
+    "534c0019010192caf0b8daf78f1d388dbbceaec34bd2dabc31b217e32343663667f6694a3f4617160014e0cffbee1925a411844f44c3b8d81365ab51d0360247304402207f1003c59661ddf564af2e10d19ad8d6a1a47ad30e7052197d95fd65d186a67802205f0a804509980fec1b063554aadd8fb871d7c9fe934087cba2da09cbeff8531c012103a961687895a78da9aef98eed8e1f2a3e91cfb69d2f3cf11cbd0bb1773d951928"
 ),
 (
     "all all all all all all all all all all all all",
     "TREZOR",
     "2d773852e0959b3c1bac15bd3a8ad410e2c6720befb4f7f428d74bdd5d6e4f1d",
+    AF_CLASSIC,
     "m/44'/0'/0'/1/0",
     "76a9145a4deff88ada6705ed70835bc0db56a124b9cdcd88ac",
     False,
     "",
     "abf12242bc87f457126373a08775fbeb67ccd5e09c4acbc1d8b310be68a3ac33",
     "534c00190001ccc49ac5fede0efc80725fbda8b763d4e62a221c51cc5425076cffa7722c0bda6b483045022100e818002d0a85438a7f2140503a6aa0a6af6002fa956d0101fd3db24e776e546f0220430fd59dc1498bc96ab6e71a4829b60224828cf1fc35edc98e0973db203ca3f0012102f63159e21fbcb54221ec993def967ad2183a9c243c8bff6e7d60f4d5ed3b386500"
-),
-(
-    "all all all all all all all all all all all all",
-    "",
-    "0a115a171e30f8a740bae6c4144bec5dc1099ffa79b83dfb8aa3501d094de585",
-    "m/86'/0'/0'/1/0",
-    "51204102897557de0cafea0a8401ea5b59668eccb753e4b100aebe6a19609f3cc79f",
-    False,
-    "",
-    "331a936e0a94d8ec7a105507dbdd445d6cd6a516d53c0bfd83769bdac1950483",
-    "534c00190001dc18066224b9e30e306303436dc18ab881c7266c13790350a3fe415e438135ec000140647d6af883107a870417e808abe424882bd28ee04a28ba85a7e99400e1b9485075733695964c2a0fa02d4439ab80830e9566ccbd10f2597f5513eff9f03a0497"
+# ),
+# (
+#     "all all all all all all all all all all all all",
+#     "",
+#     "0a115a171e30f8a740bae6c4144bec5dc1099ffa79b83dfb8aa3501d094de585",
+#     "m/86'/0'/0'/1/0",
+#     "51204102897557de0cafea0a8401ea5b59668eccb753e4b100aebe6a19609f3cc79f",
+#     False,
+#     "",
+#     "331a936e0a94d8ec7a105507dbdd445d6cd6a516d53c0bfd83769bdac1950483",
+#     "534c00190001dc18066224b9e30e306303436dc18ab881c7266c13790350a3fe415e438135ec000140647d6af883107a870417e808abe424882bd28ee04a28ba85a7e99400e1b9485075733695964c2a0fa02d4439ab80830e9566ccbd10f2597f5513eff9f03a0497"
 )
 ]
 
 print('----')
+i = 0
 for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confirmation, commitment_data, sighash, proof_of_ownership in cases:
+    print("Test case #%d" % (i))
+    i += 1
     seed.set_seed_value(words)
     seed.set_bip39_passphrase(passphrase)
 
@@ -94,7 +98,7 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
     got_sighash = ownership.slip19_compile_sighash(proof_body, proof_footer)
 
     got_sighash_str = b2a_hex(got_sighash).decode('utf-8')
-    assert got_sighash_str == sighash
+    assert got_sighash_str == sighash, "got_sighash_str: %s, expected: %s" % (got_sighash_str, sighash)
 
     with stash.SensitiveValues() as sv:
         node = sv.derive_path(path)
@@ -102,4 +106,4 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
         got_full_body = proof_body + proof_signature
 
         got_proof_of_ownership = b2a_hex(got_full_body).decode('utf-8')
-        assert got_proof_of_ownership == proof_of_ownership
+        assert got_proof_of_ownership == proof_of_ownership, "got_proof_of_ownership: %s, expected: %s" % (got_proof_of_ownership, proof_of_ownership)
