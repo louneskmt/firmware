@@ -100,6 +100,15 @@ def slip19_sign_proof(node, addr_fmt, sighash):
 
     return length_prefixed_bytes(scriptsig) + witness
 
+def slip19_sign_proof_multisig(node, sighash):
+    # Sign a SLIP-0019 proof of ownership (multisig).
+    sig = ngu.secp256k1.sign(node.privkey(), sighash, 0).to_bytes()
+    r = sig[1:33]
+    s = sig[33:65]
+    der_sig = ser_sig_der(r, s, SIGHASH_ALL)
+
+    return der_sig
+
 # Utils
 def length_prefixed_bytes(data):
     return ser_compact_size(len(data)) + data
