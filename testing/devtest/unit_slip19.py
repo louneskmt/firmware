@@ -99,7 +99,8 @@ multisig_cases = [
     "TREZOR",
     "d2cca14e9ea31a5e4bb36e6e5813adf31f8744bc6da09680e3a0d69e5c8dddb1",
     "534c00190003309c4ffec5c228cc836b51d572c0a730dbabd39df9f01862502ac9eabcdeb94a46307177b959c48bf2eb516e0463bb651aad388c7f8f597320df7854212fa3443892f9573e08cedff9160b243759520733a980fed45b131a8bba171317ae5d940004004830450221009d8cd2d792633732b3a406ea86072e94c72c0d1ffb5ddde466993ee2142eeef502206fa9c6273ab35400ebf689028ebcf8d2031edb3326106339e92d499652dc43030147304402205fae1218bc4600ad6c28b6093e8f3757603681b024e60f1d92fca579bfce210b022011d6f1c6ef1c7f7601f635ed237dafc774386dd9f4be0aef85e3af3f095d8a9201695221032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b2103025324888e429ab8e3dbaf1f7802648b9cd01e9b418485c5fa4c1b9b5700e1a621033057150eb57e2b21d69866747f3d377e928f864fa88ecc5ddb1c0e501cce3f8153ae",
-    "5221032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b2103025324888e429ab8e3dbaf1f7802648b9cd01e9b418485c5fa4c1b9b5700e1a621033057150eb57e2b21d69866747f3d377e928f864fa88ecc5ddb1c0e501cce3f8153ae"
+    "5221032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b2103025324888e429ab8e3dbaf1f7802648b9cd01e9b418485c5fa4c1b9b5700e1a621033057150eb57e2b21d69866747f3d377e928f864fa88ecc5ddb1c0e501cce3f8153ae",
+    [0,2]
 )
 ]
 
@@ -138,7 +139,7 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
 
 print('----')
 i = 0
-for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confirmation, commitment_data, sighash, proof_of_ownership, witness_script in multisig_cases:
+for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confirmation, commitment_data, sighash, proof_of_ownership, witness_script, signers in multisig_cases:
     print("Multisig Test case #%d" % (i))
     i += 1
     
@@ -156,7 +157,6 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
         # print(b2a_hex(ownership_id).decode('utf-8'))
         ownership_ids.append(ownership_id)
 
-    # we only sign with keys in signers
     proof_body = ownership.slip19_compile_proof_body(ownership_ids, user_confirmation)
     proof_footer = ownership.slip19_compile_proof_footer(a2b_hex(script_pubkey), a2b_hex(b2a_hex(commitment_data)))
     got_sighash = ownership.slip19_compile_sighash(proof_body, proof_footer)
@@ -164,24 +164,16 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
     got_sighash_str = b2a_hex(got_sighash).decode('utf-8')
     assert got_sighash_str == sighash, "got_sighash_str: %s, expected: %s" % (got_sighash_str, sighash)
 
+    # we only sign with keys in signers
     signatures = []
-    for i in range(len(words)):
+    for i in signers:
         seed.set_seed_value(words[i])
         seed.set_bip39_passphrase(passphrase[i])
         with stash.SensitiveValues() as sv:
             node = sv.derive_path(path)
             signatures.append(ownership.slip19_sign_proof_multisig(node, got_sighash))
 
-    signatures.pop(1)
-
-    nb_elements = (len(signatures) + 2).to_bytes(1, 'big')
-    sigs = b''
-    for s in signatures:
-        sigs += ownership.length_prefixed_bytes(s)
-
-    proof_signature = nb_elements + b'\x00' + sigs + bytes(witness_script)
-    print(proof_signature)
-    got_full_body = proof_body + proof_signature
+    got_full_body = ownership.slip19_create_multisig_proof(proof_body, signatures, a2b_hex(witness_script)) 
 
     got_proof_of_ownership = b2a_hex(got_full_body).decode('utf-8')
     assert got_proof_of_ownership == proof_of_ownership, "got_proof_of_ownership: %s, expected: %s" % (got_proof_of_ownership, proof_of_ownership)

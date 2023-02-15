@@ -109,6 +109,18 @@ def slip19_sign_proof_multisig(node, sighash):
 
     return der_sig
 
+def slip19_create_multisig_proof(proof_body: bytes, signatures: list, witness_script: bytes):
+    nb_elements = (len(signatures) + 2).to_bytes(1, 'big')
+    sigs = b'\x00'
+    for s in signatures:
+        sigs += length_prefixed_bytes(s)
+    
+    scriptsig = b'\x00'
+
+    proof_signature = scriptsig + nb_elements + sigs + length_prefixed_bytes(witness_script)
+
+    return proof_body + proof_signature
+
 # Utils
 def length_prefixed_bytes(data):
     return ser_compact_size(len(data)) + data
