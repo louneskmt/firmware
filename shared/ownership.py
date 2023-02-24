@@ -3,7 +3,7 @@
 #
 import ngu
 from serializations import ser_compact_size, ser_sig_der, SIGHASH_ALL
-from chains import AF_P2WPKH, AF_CLASSIC, AF_P2WPKH_P2SH, AF_P2WSH
+from chains import AF_P2WPKH, AF_CLASSIC, AF_P2WPKH_P2SH
 
 # SLIP-0021 - Symmetric Key Derivation for HD Wallets
 # See https://github.com/satoshilabs/slips/blob/master/slip-0021.md
@@ -78,20 +78,21 @@ def slip19_compile_sighash(proof_body, proof_footer):
     # Compile the sighash of a SLIP-0019 proof of ownership.
     return ngu.hash.sha256s(proof_body + proof_footer)
 
-def slip19_sign_proof(node, addr_fmt, sighash):
+def slip19_sign_proof(node, sighash):
     # Sign a SLIP-0019 proof of ownership.
-
     sig = ngu.secp256k1.sign(node.privkey(), sighash, 0).to_bytes()
     r = sig[1:33]
     s = sig[33:65]
     der_sig = ser_sig_der(r, s, SIGHASH_ALL)
 
-    keyhash = ngu.hash.hash160(node.pubkey())
+    return der_sig
+
+def slip19_produce_proof(node, addr_fmt, der_sig):
     if addr_fmt == AF_CLASSIC:
         scriptsig = length_prefixed_bytes(der_sig) + length_prefixed_bytes(node.pubkey())
         witness = b'\x00'
     elif addr_fmt == AF_P2WPKH_P2SH:
-        redeem_script = b'\x00\x14' + keyhash
+        redeem_script = b'\x00\x14' + ngu.hash.hash160(node.pubkey())
         scriptsig = length_prefixed_bytes(redeem_script)
         witness = b'\x02' + length_prefixed_bytes(der_sig) + length_prefixed_bytes(node.pubkey())
     elif addr_fmt == AF_P2WPKH:
@@ -99,15 +100,6 @@ def slip19_sign_proof(node, addr_fmt, sighash):
         witness = b'\x02' + length_prefixed_bytes(der_sig) + length_prefixed_bytes(node.pubkey())
 
     return length_prefixed_bytes(scriptsig) + witness
-
-def slip19_sign_proof_multisig(node, sighash):
-    # Sign a SLIP-0019 proof of ownership (multisig).
-    sig = ngu.secp256k1.sign(node.privkey(), sighash, 0).to_bytes()
-    r = sig[1:33]
-    s = sig[33:65]
-    der_sig = ser_sig_der(r, s, SIGHASH_ALL)
-
-    return der_sig
 
 def slip19_create_multisig_proof(proof_body: bytes, signatures: list, witness_script: bytes):
     nb_elements = (len(signatures) + 2).to_bytes(1, 'big')

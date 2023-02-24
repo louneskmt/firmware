@@ -131,7 +131,8 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
 
     with stash.SensitiveValues() as sv:
         node = sv.derive_path(path)
-        proof_signature = ownership.slip19_sign_proof(node, addr_fmt, got_sighash)
+        sig = ownership.slip19_sign_proof(node, got_sighash)
+        proof_signature = ownership.slip19_produce_proof(node, addr_fmt, sig)
         got_full_body = proof_body + proof_signature
 
         got_proof_of_ownership = b2a_hex(got_full_body).decode('utf-8')
@@ -171,7 +172,7 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
         seed.set_bip39_passphrase(passphrase[i])
         with stash.SensitiveValues() as sv:
             node = sv.derive_path(path)
-            signatures.append(ownership.slip19_sign_proof_multisig(node, got_sighash))
+            signatures.append(ownership.slip19_sign_proof(node, got_sighash))
 
     got_full_body = ownership.slip19_create_multisig_proof(proof_body, signatures, a2b_hex(witness_script)) 
 
