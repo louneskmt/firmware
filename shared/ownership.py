@@ -2,7 +2,7 @@
 # ownership.py - Proof of Ownership (SLIP-0019)
 #
 import ngu
-from serializations import ser_compact_size, ser_sig_der, SIGHASH_ALL
+from serializations import ser_compact_size, ser_sig_der, deser_compact_size, SIGHASH_ALL
 from chains import AF_P2WPKH, AF_CLASSIC, AF_P2WPKH_P2SH
 
 # SLIP-0021 - Symmetric Key Derivation for HD Wallets
@@ -80,14 +80,10 @@ def slip19_compile_sighash(proof_body, proof_footer):
 
 def slip19_sign_proof(node, sighash):
     # Sign a SLIP-0019 proof of ownership.
-    sig = ngu.secp256k1.sign(node.privkey(), sighash, 0).to_bytes()
-    r = sig[1:33]
-    s = sig[33:65]
-    der_sig = ser_sig_der(r, s, SIGHASH_ALL)
+    return ngu.secp256k1.sign(node.privkey(), sighash, 0)
 
-    return der_sig
-
-def slip19_produce_proof(node, addr_fmt, der_sig):
+def slip19_produce_proof(node, addr_fmt, sig):
+    der_sig = recoverable_to_der(sig)
     if addr_fmt == AF_CLASSIC:
         scriptsig = length_prefixed_bytes(der_sig) + length_prefixed_bytes(node.pubkey())
         witness = b'\x00'
@@ -105,7 +101,7 @@ def slip19_create_multisig_proof(proof_body: bytes, signatures: list, witness_sc
     nb_elements = (len(signatures) + 2).to_bytes(1, 'big')
     sigs = b'\x00'
     for s in signatures:
-        sigs += length_prefixed_bytes(s)
+        sigs += length_prefixed_bytes(recoverable_to_der(s))
     
     scriptsig = b'\x00'
 
@@ -116,3 +112,55 @@ def slip19_create_multisig_proof(proof_body: bytes, signatures: list, witness_sc
 # Utils
 def length_prefixed_bytes(data):
     return ser_compact_size(len(data)) + data
+
+def recoverable_to_der(recoverable):
+    sig_bytes = recoverable.to_bytes()
+    r = sig_bytes[1:33]
+    s = sig_bytes[33:65]
+    return ser_sig_der(r, s, SIGHASH_ALL)
+
+def der_to_recoverable(der_sig):
+    try:
+        assert der_sig[0] == b'\x30'
+        der_sig = der_sig[1:]
+    except AssertionError:
+        raise
+
+    total_len = deser_compact_size(BytesIO(der_sig))
+    if total_len != len(der_sig):
+        raise Exception("Truncated der sig")
+    
+    der_sig = der_sig[1:]
+
+    try:
+        assert der_sig[0] == b'\x02'
+        der_sig = der_sig[1:]
+    except AssertionError:
+        raise
+
+    r_len = deser_compact_size(BytesIO(der_sig))
+    der_sig = der_sig[1:]
+    r = der_sig[0:r_len]
+    der_sig = der_sig[r_len+1:]
+
+    try:
+        assert der_sig[0] == b'\x02'
+        der_sig = der_sig[1:]
+    except AssertionError:
+        raise
+
+    s_len = deser_compact_size(BytesIO(der_sig))
+    der_sig = der_sig[1:]
+    s = der_sig[0:s_len]
+
+    try:
+        assert der_sig[0] == b'\x01'
+    except AssertionError:
+        raise Exception("Not Sighash_all?")
+
+    while len(r) < 32:
+        r = b'\x00' + r
+    while len(s) < 32:
+        s = b'\x00' + s
+
+    return ser_string(r + s)

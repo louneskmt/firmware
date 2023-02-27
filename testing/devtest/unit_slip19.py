@@ -138,6 +138,8 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
         got_proof_of_ownership = b2a_hex(got_full_body).decode('utf-8')
         assert got_proof_of_ownership == proof_of_ownership, "got_proof_of_ownership: %s, expected: %s" % (got_proof_of_ownership, proof_of_ownership)
 
+        # assert ownership.slip19_verify_signature(node.pubkey(), sig, got_sighash)
+
 print('----')
 i = 0
 for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confirmation, commitment_data, sighash, proof_of_ownership, witness_script, signers in multisig_cases:
