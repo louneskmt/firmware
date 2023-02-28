@@ -87,8 +87,15 @@ def slip19_parse_proof_body(proof_body):
     flags = proof_body[4]
     user_confirmation = (flags & 0x01) != 0
     reserved_bits = [(flags & 0x02) != 0, (flags & 0x04) != 0, (flags & 0x08) != 0, (flags & 0x10) != 0, (flags & 0x20) != 0, (flags & 0x40) != 0, (flags & 0x80) != 0]
+    # Other flags are not defined for now, raise Exception if one of them is true
+    if any(reserved_bits):
+        raise ValueError('Invalid flag set to true')
 
     n = deser_compact_size(BytesIO(proof_body[5:]))
+    if (n*32) < len(proof_body[5+len(ser_compact_size(n)):]):
+        raise ValueError('Varint too low')
+    if (n*32) > len(proof_body[5+len(ser_compact_size(n)):]):
+        raise ValueError('Varint too high')
     ownership_ids = []
     for i in range(n):
         ownership_ids.append(proof_body[5 + len(ser_compact_size(n)) + (i * 32):5 + len(ser_compact_size(n)) + (i * 32) + 32])

@@ -10,7 +10,7 @@ import ownership
 from ubinascii import hexlify as b2a_hex
 from ubinascii import unhexlify as a2b_hex
 import stash, seed
-from chains import AF_P2WPKH, AF_P2WPKH_P2SH, AF_CLASSIC, AF_P2WSH
+from chains import verify_recover_pubkey, AF_P2WPKH, AF_P2WPKH_P2SH, AF_CLASSIC, AF_P2WSH
 
 """
 (
@@ -23,6 +23,8 @@ from chains import AF_P2WPKH, AF_P2WPKH_P2SH, AF_CLASSIC, AF_P2WSH
     "commitmentData",
     "sighash",
     "proof of ownership",
+    "witness script", (multisig only)
+    "signers" (multisig only)
 )
 """
 cases = [
@@ -104,6 +106,50 @@ multisig_cases = [
 )
 ]
 
+"""
+(
+    Test name,
+    proof_body,
+    expected user confirmation,
+    expected ownership id(s)
+)
+"""
+proof_body_cases = [
+(
+    "Valid",
+    "534c00190001a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad5707",
+    False,
+    [
+        "a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad5707"
+    ]
+),
+(
+    "Wrong Magic",
+    "534c00180001a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad5707",
+    False,
+    []
+),
+(
+    "Wrong Flag",
+    "534c0019ab01a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad5707",
+    False,
+    []
+),
+(
+    "Varint too high",
+    "534c00190002a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad5707",
+    False,
+    []
+),
+(
+    "Varint too low",
+    "534c00190001309c4ffec5c228cc836b51d572c0a730dbabd39df9f01862502ac9eabcdeb94a46307177b959c48bf2eb516e0463bb651aad388c7f8f597320df7854212fa3443892f9573e08cedff9160b243759520733a980fed45b131a8bba171317ae5d94",
+    False,
+    [
+    ]
+)
+]
+
 print('----')
 i = 0
 for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confirmation, commitment_data, sighash, proof_of_ownership in cases:
@@ -182,3 +228,37 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
 
     got_proof_of_ownership = b2a_hex(got_full_body).decode('utf-8')
     assert got_proof_of_ownership == proof_of_ownership, "got_proof_of_ownership: %s, expected: %s" % (got_proof_of_ownership, proof_of_ownership)
+
+print('----')
+i = 0
+for name, proof_body_hex, user_confirmation, ownership_ids_hex in proof_body_cases:
+    print("proof body Test case #%d" % (i))
+    print(name)
+    i += 1
+
+    proof_body = a2b_hex(proof_body_hex)
+    ownership_ids = []
+    for id in ownership_ids_hex:
+        ownership_ids.append(a2b_hex(id))
+
+    if "Valid" in name:
+        got_user_confirmation, got_ownership_ids = ownership.slip19_parse_proof_body(proof_body)
+        assert got_user_confirmation == user_confirmation, "got %s, expected %s" % (got_user_confirmation, user_confirmation)
+        for i, id in enumerate(ownership_ids):
+            assert got_ownership_ids[i] == id, "got %s, expected %s" % (got_ownership_ids[i], id)
+        continue
+
+    try:
+        got_user_confirmation, got_ownership_ids = ownership.slip19_parse_proof_body(proof_body)
+    except ValueError as e:
+        if name == "Wrong Magic":
+            assert e.__class__.__name__ == "ValueError", "Wrong exception %s for test \"%s\"" % (e.__class__.__name__, name)
+        elif name == "Wrong Flag":
+            assert e.__class__.__name__ == "ValueError", "Wrong exception %s for test \"%s\"" % (e.__class__.__name__, name)
+        if name == "Varint too low":
+            assert e.__class__.__name__ == "ValueError", "Wrong exception %s for test \"%s\"" % (e.__class__.__name__, name)
+        if name == "Varint too high":
+            assert e.__class__.__name__ == "ValueError", "Wrong exception %s for test \"%s\"" % (e.__class__.__name__, name)
+        print("Successfully caught exception %s: %s for case %s" % (e.__class__.__name__, e,name))
+        continue
+    raise Exception("Didn't raise exception for case %s" % (name))
