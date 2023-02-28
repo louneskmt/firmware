@@ -131,7 +131,7 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
 
     with stash.SensitiveValues() as sv:
         node = sv.derive_path(path)
-        sig = ownership.slip19_sign_proof(node, got_sighash)
+        sig = ownership.slip19_signing_protocol(master_seed, node, proof_body, proof_footer)
         proof_signature = ownership.slip19_produce_proof(node, addr_fmt, sig)
         got_full_body = proof_body + proof_signature
 
@@ -145,7 +145,7 @@ i = 0
 for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confirmation, commitment_data, sighash, proof_of_ownership, witness_script, signers in multisig_cases:
     print("Multisig Test case #%d" % (i))
     i += 1
-    
+
     # compute all ownership_ids
     ownership_ids = []
     for i in range(len(words)):
@@ -172,11 +172,13 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
     for i in signers:
         seed.set_seed_value(words[i])
         seed.set_bip39_passphrase(passphrase[i])
+        master_seed = bip39.master_secret(words[i], passphrase[i])
         with stash.SensitiveValues() as sv:
             node = sv.derive_path(path)
-            signatures.append(ownership.slip19_sign_proof(node, got_sighash))
+            sig = ownership.slip19_signing_protocol(master_seed, node, proof_body, proof_footer)
+            signatures.append(sig)
 
-    got_full_body = ownership.slip19_create_multisig_proof(proof_body, signatures, a2b_hex(witness_script)) 
+    got_full_body = ownership.slip19_create_multisig_proof(proof_body, signatures, a2b_hex(witness_script))
 
     got_proof_of_ownership = b2a_hex(got_full_body).decode('utf-8')
     assert got_proof_of_ownership == proof_of_ownership, "got_proof_of_ownership: %s, expected: %s" % (got_proof_of_ownership, proof_of_ownership)
