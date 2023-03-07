@@ -95,7 +95,7 @@ def slip19_parse_proof_signature(proof):
         witness = proof[offset:]
     else:
         witness = b''
-    
+
     if scriptsig_len == witness_el == 0:
         raise ValueError("SLIP-0019 proof of ownership must be signed")
 
@@ -165,7 +165,7 @@ def slip19_sign_proof(node, sighash):
     return ngu.secp256k1.sign(node.privkey(), sighash, 0)
 
 def slip19_produce_proof(node, addr_fmt, sig):
-    der_sig = recoverable_to_der(sig)
+    der_sig, _ = recoverable_to_der(sig)
     if addr_fmt == AF_CLASSIC:
         scriptsig = ser_string(der_sig) + ser_string(node.pubkey())
         witness = b'\x00'
@@ -183,7 +183,8 @@ def slip19_create_multisig_proof(proof_body: bytes, signatures: list, witness_sc
     nb_elements = (len(signatures) + 2).to_bytes(1, 'big')
     sigs = b'\x00'
     for s in signatures:
-        sigs += ser_string(recoverable_to_der(s))
+        sig, _ = recoverable_to_der(s)
+        sigs += ser_string(sig)
 
     scriptsig = b'\x00'
 
@@ -192,49 +193,60 @@ def slip19_create_multisig_proof(proof_body: bytes, signatures: list, witness_sc
     return proof_body + proof_signature
 
 # Utils
-def recoverable_to_der(recoverable):
+def recoverable_to_der(recoverable: ngu.secp256k1.Sig) -> Tuple[bytes, int]:
     sig_bytes = recoverable.to_bytes()
     r = sig_bytes[1:33]
     s = sig_bytes[33:65]
-    return ser_sig_der(r, s, SIGHASH_ALL)
+    recid = int.from_bytes(sig_bytes[0:1], 'big') - 27 & 3
+    return ser_sig_der(r, s, SIGHASH_ALL), recid
 
-def der_to_recoverable(der_sig):
-    try:
-        assert der_sig[0] == '\x30'
-        der_sig = der_sig[1:]
-    except AssertionError:
-        raise
+def der_to_recoverable(der_sig: bytes, recid: int = 0) -> bytes:
+    with BytesIO(der_sig) as fd:
+        try:
+            assert fd.read(1) == b'\x30'
+        except AssertionError:
+            raise ValueError("Invalid der sig: invalid header byte")
 
-    total_len = deser_compact_size(der_sig[0])
-    if total_len != len(der_sig):
-        raise Exception("Truncated der sig")
+        total_len = deser_compact_size(fd)
 
-    der_sig = der_sig[1:]
+        count = 0
 
-    try:
-        assert der_sig[0] == '\x02'
-        der_sig = der_sig[1:]
-    except AssertionError:
-        raise
+        try:
+            assert fd.read(1) == b'\x02'
+        except AssertionError:
+            raise ValueError("Invalid der sig: invalid int marker")
 
-    r_len = deser_compact_size(der_sig[0])
-    der_sig = der_sig[1:]
-    r = der_sig[0:r_len]
-    der_sig = der_sig[r_len+1:]
+        count += 1
 
-    try:
-        assert der_sig[0] == '\x02'
-        der_sig = der_sig[1:]
-    except AssertionError:
-        raise
+        r = deser_string(fd)
 
-    s_len = deser_compact_size(der_sig[0])
-    der_sig = der_sig[1:]
-    s = der_sig[0:s_len]
+        count += len(ser_compact_size(len(r))) + len(r)
 
-    try:
-        assert der_sig[0] == '\x01'
-    except AssertionError:
-        raise
+        try:
+            assert fd.read(1) == b'\x02'
+        except AssertionError:
+            raise ValueError("Invalid der sig: invalid int marker")
 
-    return r, s
+        count += 1
+
+        s = deser_string(fd)
+
+        count += len(ser_compact_size(len(s))) + len(s)
+
+        try:
+            assert count == total_len
+        except AssertionError:
+            raise ValueError("Invalid der sig: invalid length")
+
+        try:
+            assert fd.read(1) == b'\x01'
+        except AssertionError:
+            raise ValueError("Not Sighash_all")
+
+        while len(r) > 32 and r[0] == 0:
+            r = r[1:]
+        while len(s) > 32 and s[0] == 0:
+            s = s[1:]
+
+        prefix = 27 + 4 + recid
+        return prefix.to_bytes(1, 'big') + r + s

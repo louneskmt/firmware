@@ -175,6 +175,9 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
     with stash.SensitiveValues() as sv:
         node = sv.derive_path(path)
         sig = ownership.slip19_signing_protocol(master_seed, node, proof_body, proof_footer)
+        der_sig, recid = ownership.recoverable_to_der(sig) 
+        got_sig = ownership.der_to_recoverable(der_sig, recid) 
+        assert got_sig == sig.to_bytes(), "got %s, expected %s" % (b2a_hex(got_sig), b2a_hex(sig.to_bytes()))
         proof_signature = ownership.slip19_produce_proof(node, addr_fmt, sig)
         got_full_body = proof_body + proof_signature
 
