@@ -22,6 +22,8 @@ from chains import verify_recover_pubkey, AF_P2WPKH, AF_P2WPKH_P2SH, AF_CLASSIC,
     "User confirmation",
     "commitmentData",
     "sighash",
+    "scriptsig",
+    "witness",
     "proof of ownership",
     "witness script", (multisig only)
     "signers" (multisig only)
@@ -38,6 +40,8 @@ cases = [
     False,
     "",
     "850dd556283b49d80fa5501035b4775e62f0c80bf36f62d1adf2f2f9f108c884",
+    "",
+    "02483045022100c0dc28bb563fc5fea76cacff75dba9cb4122412faae01937cdebccfb065f9a7002202e980bfbd8a434a7fc4cd2ca49da476ce98ca097437f8159b1a386b41fcdfac50121032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b",
     "534c00190001a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad57070002483045022100c0dc28bb563fc5fea76cacff75dba9cb4122412faae01937cdebccfb065f9a7002202e980bfbd8a434a7fc4cd2ca49da476ce98ca097437f8159b1a386b41fcdfac50121032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b"
 ),
 (
@@ -50,6 +54,8 @@ cases = [
     True,
     "TREZOR",
     "709fa3a60709cecefbd7aaaf551ff23421d65d1c046e6a9390abf73cbcd2fc83",
+    "160014e0cffbee1925a411844f44c3b8d81365ab51d036",
+    "0247304402207f1003c59661ddf564af2e10d19ad8d6a1a47ad30e7052197d95fd65d186a67802205f0a804509980fec1b063554aadd8fb871d7c9fe934087cba2da09cbeff8531c012103a961687895a78da9aef98eed8e1f2a3e91cfb69d2f3cf11cbd0bb1773d951928",
     "534c0019010192caf0b8daf78f1d388dbbceaec34bd2dabc31b217e32343663667f6694a3f4617160014e0cffbee1925a411844f44c3b8d81365ab51d0360247304402207f1003c59661ddf564af2e10d19ad8d6a1a47ad30e7052197d95fd65d186a67802205f0a804509980fec1b063554aadd8fb871d7c9fe934087cba2da09cbeff8531c012103a961687895a78da9aef98eed8e1f2a3e91cfb69d2f3cf11cbd0bb1773d951928"
 ),
 (
@@ -62,6 +68,8 @@ cases = [
     False,
     "",
     "abf12242bc87f457126373a08775fbeb67ccd5e09c4acbc1d8b310be68a3ac33",
+    "483045022100e818002d0a85438a7f2140503a6aa0a6af6002fa956d0101fd3db24e776e546f0220430fd59dc1498bc96ab6e71a4829b60224828cf1fc35edc98e0973db203ca3f0012102f63159e21fbcb54221ec993def967ad2183a9c243c8bff6e7d60f4d5ed3b3865",
+    "",
     "534c00190001ccc49ac5fede0efc80725fbda8b763d4e62a221c51cc5425076cffa7722c0bda6b483045022100e818002d0a85438a7f2140503a6aa0a6af6002fa956d0101fd3db24e776e546f0220430fd59dc1498bc96ab6e71a4829b60224828cf1fc35edc98e0973db203ca3f0012102f63159e21fbcb54221ec993def967ad2183a9c243c8bff6e7d60f4d5ed3b386500"
 # ),
 # (
@@ -100,6 +108,8 @@ multisig_cases = [
     False,
     "TREZOR",
     "d2cca14e9ea31a5e4bb36e6e5813adf31f8744bc6da09680e3a0d69e5c8dddb1",
+    "",
+    "04004830450221009d8cd2d792633732b3a406ea86072e94c72c0d1ffb5ddde466993ee2142eeef502206fa9c6273ab35400ebf689028ebcf8d2031edb3326106339e92d499652dc43030147304402205fae1218bc4600ad6c28b6093e8f3757603681b024e60f1d92fca579bfce210b022011d6f1c6ef1c7f7601f635ed237dafc774386dd9f4be0aef85e3af3f095d8a9201695221032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b2103025324888e429ab8e3dbaf1f7802648b9cd01e9b418485c5fa4c1b9b5700e1a621033057150eb57e2b21d69866747f3d377e928f864fa88ecc5ddb1c0e501cce3f8153ae",
     "534c00190003309c4ffec5c228cc836b51d572c0a730dbabd39df9f01862502ac9eabcdeb94a46307177b959c48bf2eb516e0463bb651aad388c7f8f597320df7854212fa3443892f9573e08cedff9160b243759520733a980fed45b131a8bba171317ae5d940004004830450221009d8cd2d792633732b3a406ea86072e94c72c0d1ffb5ddde466993ee2142eeef502206fa9c6273ab35400ebf689028ebcf8d2031edb3326106339e92d499652dc43030147304402205fae1218bc4600ad6c28b6093e8f3757603681b024e60f1d92fca579bfce210b022011d6f1c6ef1c7f7601f635ed237dafc774386dd9f4be0aef85e3af3f095d8a9201695221032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b2103025324888e429ab8e3dbaf1f7802648b9cd01e9b418485c5fa4c1b9b5700e1a621033057150eb57e2b21d69866747f3d377e928f864fa88ecc5ddb1c0e501cce3f8153ae",
     "5221032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b2103025324888e429ab8e3dbaf1f7802648b9cd01e9b418485c5fa4c1b9b5700e1a621033057150eb57e2b21d69866747f3d377e928f864fa88ecc5ddb1c0e501cce3f8153ae",
     [0,2]
@@ -152,7 +162,7 @@ proof_body_cases = [
 
 print('----')
 i = 0
-for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confirmation, commitment_data, sighash, proof_of_ownership in cases:
+for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confirmation, commitment_data, sighash, scriptsig, witness, proof_of_ownership in cases:
     print("Test case #%d" % (i))
     i += 1
     seed.set_seed_value(words)
@@ -187,9 +197,12 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
         _, recovered_pub = verify_recover_pubkey(sig.to_bytes(), got_sighash) # we ignore the returned af as it's false
         assert recovered_pub == node.pubkey(), "got %s, expected %s" % (b2a_hex(recovered_pub), b2a_hex(node.pubkey()))
 
+        # parse the proof_of_ownership
+        assert ownership.slip19_parse_proof_ownership(a2b_hex(got_proof_of_ownership)) == (user_confirmation, [ownership_id], a2b_hex(scriptsig), a2b_hex(witness)), "got %s, expected %s" % (ownership.slip19_parse_proof_ownership(a2b_hex(got_proof_of_ownership)), (user_confirmation, ownership_id, scriptsig, witness))
+
 print('----')
 i = 0
-for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confirmation, commitment_data, sighash, proof_of_ownership, witness_script, signers in multisig_cases:
+for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confirmation, commitment_data, sighash, scriptsig, witness, proof_of_ownership, witness_script, signers in multisig_cases:
     print("Multisig Test case #%d" % (i))
     i += 1
 
@@ -231,6 +244,8 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
 
     got_proof_of_ownership = b2a_hex(got_full_body).decode('utf-8')
     assert got_proof_of_ownership == proof_of_ownership, "got_proof_of_ownership: %s, expected: %s" % (got_proof_of_ownership, proof_of_ownership)
+
+    assert ownership.slip19_parse_proof_ownership(a2b_hex(got_proof_of_ownership)) == (user_confirmation, ownership_ids, a2b_hex(scriptsig), a2b_hex(witness)), "got %s, expected %s" % (ownership.slip19_parse_proof_ownership(a2b_hex(got_proof_of_ownership)), (user_confirmation, ownership_id, scriptsig, witness))
 
 print('----')
 i = 0

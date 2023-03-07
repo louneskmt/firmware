@@ -79,6 +79,28 @@ def slip19_compile_sighash(proof_body, proof_footer):
     # Compile the sighash of a SLIP-0019 proof of ownership.
     return ngu.hash.sha256s(proof_body + proof_footer)
 
+def slip19_parse_proof_signature(proof):
+    # Parse the signature of a SLIP-0019 proof of ownership.
+    scriptsig_len = deser_compact_size(BytesIO(proof[0:]))
+
+    if scriptsig_len is not 0:
+        scriptsig = deser_string(BytesIO(proof[0:]))
+    else:
+        scriptsig = b''
+
+    offset = len(ser_compact_size(scriptsig_len)) + scriptsig_len
+    witness_el = deser_compact_size(BytesIO(proof[offset:]))
+
+    if witness_el is not 0:
+        witness = proof[offset:]
+    else:
+        witness = b''
+    
+    if scriptsig_len == witness_el == 0:
+        raise ValueError("SLIP-0019 proof of ownership must be signed")
+
+    return scriptsig, witness
+
 def slip19_parse_proof_body(proof_body):
     # Parse the body of a SLIP-0019 proof of ownership.
     if proof_body[0:4] != SLIP19_VERSION_MAGIC:
@@ -101,6 +123,12 @@ def slip19_parse_proof_body(proof_body):
         ownership_ids.append(proof_body[5 + len(ser_compact_size(n)) + (i * 32):5 + len(ser_compact_size(n)) + (i * 32) + 32])
 
     return 5 + len(ser_compact_size(n)) + n*32, user_confirmation, ownership_ids
+
+def slip19_parse_proof_ownership(proof: bytes) -> Tuple[bool, bytes, bytes, bytes]:
+    n, user_confirmation, ownership_id = slip19_parse_proof_body(proof)
+    scriptsig, witness = slip19_parse_proof_signature(proof[n:])
+
+    return user_confirmation, ownership_id, scriptsig, witness
 
 def slip19_parse_proof_footer(proof_footer):
     # Parse the footer of a SLIP-0019 proof of ownership.
