@@ -190,6 +190,12 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
         # parse the proof_of_ownership
         assert ownership.slip19_parse_proof_ownership(a2b_hex(got_proof_of_ownership)) == (user_confirmation, [ownership_id], a2b_hex(scriptsig), a2b_hex(witness)), "got %s, expected %s" % (ownership.slip19_parse_proof_ownership(a2b_hex(got_proof_of_ownership)), (user_confirmation, ownership_id, scriptsig, witness))
 
+        # verify the signature contained in the proof
+        try:
+            ownership.slip19_verify_signature(a2b_hex(script_pubkey), got_sighash, a2b_hex(scriptsig), a2b_hex(witness))
+        except ValueError as e:
+            assert False, "Failed to verify signature: %s" % (e)
+
 print('----')
 i = 0
 for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confirmation, commitment_data, sighash, scriptsig, witness, proof_of_ownership, witness_script, signers in multisig_cases:

@@ -2,9 +2,10 @@
 # ownership.py - Proof of Ownership (SLIP-0019)
 #
 import ngu
-from serializations import ser_compact_size, ser_sig_der, deser_compact_size, SIGHASH_ALL, ser_string, deser_string
-from chains import AF_P2WPKH, AF_CLASSIC, AF_P2WPKH_P2SH
+from serializations import CTxOut, ser_compact_size, ser_sig_der, deser_compact_size, SIGHASH_ALL, ser_string, deser_string, hash160
+from chains import verify_recover_pubkey, AF_P2WPKH, AF_CLASSIC, AF_P2WPKH_P2SH
 from uio import BytesIO
+from utils import parse_addr_fmt_str
 
 # SLIP-0021 - Symmetric Key Derivation for HD Wallets
 # See https://github.com/satoshilabs/slips/blob/master/slip-0021.md
@@ -192,7 +193,51 @@ def slip19_create_multisig_proof(proof_body: bytes, signatures: list, witness_sc
 
     return proof_body + proof_signature
 
+def slip19_verify_signature(spk, sighash, scriptsig=None, witness=None):
+    # see https://github.com/bitcoin/bips/blob/f9e95849f337358cd89c83b948fbede3875481c3/bip-0322.mediawiki#user-content-Verifying
+    # We need a signature, scriptsig and witness can't be both empty
+    if len(scriptsig) == 0 and len(witness) == 0:
+        raise ValueError('Invalid SLIP-0019 proof: no signature provided')
+    # Determine the address format using the scriptPubKey.
+    txout = CTxOut(0, spk)
+    af, hash, is_segwit = txout.get_address()
+    if af is 'p2pkh' and is_segwit:
+        af = 'p2wpkh'
+    if af is 'p2sh' and is_segwit:
+        af = 'p2wsh'
+    if af is 'p2sh' and hash == hash160(scriptsig[1:]):
+        af = 'p2sh-p2wpkh'
+    addr_fmt = parse_addr_fmt_str(af)
+
+    # Verify the signature.
+    if addr_fmt == AF_CLASSIC:
+        # Check that the scriptsig is not empty and witness is empty.
+        if len(scriptsig) == 0:
+            raise ValueError('Invalid SLIP-0019 proof: scriptsig is empty for p2pkh')
+        if len(witness) != 0:
+            raise ValueError('Invalid SLIP-0019 proof: witness is not empty for p2pkh')
+        # extract the der signature and the pubkey from the scriptsig
+        der_sig, pubkey = slip19_parse_scriptsig(scriptsig)
+        # hash the pubkey and check that it matches the hash in the scriptPubKey
+        if hash != hash160(pubkey):
+            raise ValueError('Invalid SLIP-0019 proof: pubkey doesn\'t match the hash in the scriptPubKey')
+        # get the recoverable signature from the der signature
+        sig = der_to_recoverable(der_sig) # we don't know recid, but it should be alright
+        # verify the signature
+        _, r_pubkey = verify_recover_pubkey(sig, sighash)
+        if r_pubkey != pubkey:
+            raise ValueError('Invalid SLIP-0019 proof: invalid signature for p2pkh')
+    elif addr_fmt == AF_P2WPKH_P2SH:
+        pass
+    elif addr_fmt == AF_P2WPKH:
+        pass
 # Utils
+def slip19_parse_scriptsig(scriptsig):
+    with BytesIO(scriptsig) as fd:
+        der_sig = deser_string(fd)
+        pubkey = deser_string(fd)
+        return der_sig, pubkey
+
 def recoverable_to_der(recoverable: ngu.secp256k1.Sig) -> Tuple[bytes, int]:
     sig_bytes = recoverable.to_bytes()
     r = sig_bytes[1:33]
