@@ -114,10 +114,6 @@ def slip19_parse_proof_body(proof_body):
         raise ValueError('Invalid flag set to true')
 
     n = deser_compact_size(BytesIO(proof_body[5:]))
-    if (n*32) < len(proof_body[5+len(ser_compact_size(n)):]):
-        raise ValueError('Varint too low')
-    if (n*32) > len(proof_body[5+len(ser_compact_size(n)):]):
-        raise ValueError('Varint too high')
     ownership_ids = []
     for i in range(n):
         ownership_ids.append(proof_body[5 + len(ser_compact_size(n)) + (i * 32):5 + len(ser_compact_size(n)) + (i * 32) + 32])

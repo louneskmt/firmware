@@ -145,19 +145,6 @@ proof_body_cases = [
     False,
     []
 ),
-(
-    "Varint too high",
-    "534c00190002a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad5707",
-    False,
-    []
-),
-(
-    "Varint too low",
-    "534c00190001309c4ffec5c228cc836b51d572c0a730dbabd39df9f01862502ac9eabcdeb94a46307177b959c48bf2eb516e0463bb651aad388c7f8f597320df7854212fa3443892f9573e08cedff9160b243759520733a980fed45b131a8bba171317ae5d94",
-    False,
-    [
-    ]
-)
 ]
 
 print('----')
@@ -272,10 +259,6 @@ for name, proof_body_hex, user_confirmation, ownership_ids_hex in proof_body_cas
         if name == "Wrong Magic":
             assert e.__class__.__name__ == "ValueError", "Wrong exception %s for test \"%s\"" % (e.__class__.__name__, name)
         elif name == "Wrong Flag":
-            assert e.__class__.__name__ == "ValueError", "Wrong exception %s for test \"%s\"" % (e.__class__.__name__, name)
-        if name == "Varint too low":
-            assert e.__class__.__name__ == "ValueError", "Wrong exception %s for test \"%s\"" % (e.__class__.__name__, name)
-        if name == "Varint too high":
             assert e.__class__.__name__ == "ValueError", "Wrong exception %s for test \"%s\"" % (e.__class__.__name__, name)
         print("Successfully caught exception %s: %s for case %s" % (e.__class__.__name__, e,name))
         continue
