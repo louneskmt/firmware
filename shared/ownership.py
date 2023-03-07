@@ -100,7 +100,7 @@ def slip19_parse_proof_body(proof_body):
     for i in range(n):
         ownership_ids.append(proof_body[5 + len(ser_compact_size(n)) + (i * 32):5 + len(ser_compact_size(n)) + (i * 32) + 32])
 
-    return user_confirmation, ownership_ids
+    return 5 + len(ser_compact_size(n)) + n*32, user_confirmation, ownership_ids
 
 def slip19_parse_proof_footer(proof_footer):
     # Parse the footer of a SLIP-0019 proof of ownership.
@@ -114,7 +114,7 @@ def slip19_signing_protocol(master_seed, node, proof_body, proof_footer):
     # The signing protocol of a SLIP-0019 proof of ownership.
 
     # Parse the proof body.
-    user_confirmation, ownership_ids = slip19_parse_proof_body(proof_body)
+    _, user_confirmation, ownership_ids = slip19_parse_proof_body(proof_body)
 
     # Derive the ownership key.
     ownership_key = slip19_ownership_key(master_seed)

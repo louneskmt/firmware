@@ -245,14 +245,14 @@ for name, proof_body_hex, user_confirmation, ownership_ids_hex in proof_body_cas
         ownership_ids.append(a2b_hex(id))
 
     if "Valid" in name:
-        got_user_confirmation, got_ownership_ids = ownership.slip19_parse_proof_body(proof_body)
+        _, got_user_confirmation, got_ownership_ids = ownership.slip19_parse_proof_body(proof_body)
         assert got_user_confirmation == user_confirmation, "got %s, expected %s" % (got_user_confirmation, user_confirmation)
         for i, id in enumerate(ownership_ids):
             assert got_ownership_ids[i] == id, "got %s, expected %s" % (got_ownership_ids[i], id)
         continue
 
     try:
-        got_user_confirmation, got_ownership_ids = ownership.slip19_parse_proof_body(proof_body)
+        _, got_user_confirmation, got_ownership_ids = ownership.slip19_parse_proof_body(proof_body)
     except ValueError as e:
         if name == "Wrong Magic":
             assert e.__class__.__name__ == "ValueError", "Wrong exception %s for test \"%s\"" % (e.__class__.__name__, name)
