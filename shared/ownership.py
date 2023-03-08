@@ -195,6 +195,15 @@ def slip19_create_multisig_proof(proof_body: bytes, signatures: list, witness_sc
 
 def slip19_verify_signature(spk, sighash, scriptsig=None, witness=None):
     # see https://github.com/bitcoin/bips/blob/f9e95849f337358cd89c83b948fbede3875481c3/bip-0322.mediawiki#user-content-Verifying
+    def verify_all_recid(pubkey, sighash, sig):
+        # As we can't recover the recid, we need to try all 4 possibilities
+        # if one pubkey we recover matches the pubkey we expect, we return True
+        for recid in range(4):
+            sig = der_to_recoverable(der_sig, recid)
+            _, r_pubkey = verify_recover_pubkey(sig, sighash)
+            if r_pubkey == pubkey:
+                return True
+        return False
     # We need a signature, scriptsig and witness can't be both empty
     if len(scriptsig) == 0 and len(witness) == 0:
         raise ValueError('Invalid SLIP-0019 proof: no signature provided')
@@ -221,16 +230,26 @@ def slip19_verify_signature(spk, sighash, scriptsig=None, witness=None):
         # hash the pubkey and check that it matches the hash in the scriptPubKey
         if hash != hash160(pubkey):
             raise ValueError('Invalid SLIP-0019 proof: pubkey doesn\'t match the hash in the scriptPubKey')
-        # get the recoverable signature from the der signature
-        sig = der_to_recoverable(der_sig) # we don't know recid, but it should be alright
-        # verify the signature
-        _, r_pubkey = verify_recover_pubkey(sig, sighash)
-        if r_pubkey != pubkey:
+        if not verify_all_recid(pubkey, sighash, der_sig):
             raise ValueError('Invalid SLIP-0019 proof: invalid signature for p2pkh')
     elif addr_fmt == AF_P2WPKH_P2SH:
         pass
     elif addr_fmt == AF_P2WPKH:
-        pass
+        # Check that the scriptsig is empty and witness is not empty.
+        if len(scriptsig) != 0:
+            raise ValueError('Invalid SLIP-0019 proof: scriptsig is not empty for p2wpkh')
+        if len(witness) == 0:
+            raise ValueError('Invalid SLIP-0019 proof: witness is empty for p2wpkh')
+        # extract the der signature and the pubkey from the witness
+        sigs, pubkeys, _ = slip19_parse_witness(witness)
+        der_sig = sigs[0]
+        pubkey = pubkeys[0]
+        # hash the pubkey and check that it matches the hash in the scriptPubKey
+        if hash != hash160(pubkey):
+            raise ValueError('Invalid SLIP-0019 proof: pubkey doesn\'t match the hash in the scriptPubKey')
+        if not verify_all_recid(pubkey, sighash, der_sig):
+            raise ValueError('Invalid SLIP-0019 proof: invalid signature for p2wpkh')
+
 # Utils
 def slip19_parse_scriptsig(scriptsig):
     with BytesIO(scriptsig) as fd:
