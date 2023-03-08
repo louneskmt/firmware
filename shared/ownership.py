@@ -204,6 +204,7 @@ def slip19_verify_signature(spk, sighash, scriptsig=None, witness=None):
             if r_pubkey == pubkey:
                 return True
         return False
+
     # We need a signature, scriptsig and witness can't be both empty
     if len(scriptsig) == 0 and len(witness) == 0:
         raise ValueError('Invalid SLIP-0019 proof: no signature provided')
@@ -214,7 +215,7 @@ def slip19_verify_signature(spk, sighash, scriptsig=None, witness=None):
         af = 'p2wpkh'
     if af is 'p2sh' and is_segwit:
         af = 'p2wsh'
-    if af is 'p2sh' and hash == hash160(scriptsig[1:]):
+    if af is 'p2sh' and scriptsig[0] == 22 and scriptsig[1] == 0:
         af = 'p2sh-p2wpkh'
     addr_fmt = parse_addr_fmt_str(af)
 
@@ -226,14 +227,35 @@ def slip19_verify_signature(spk, sighash, scriptsig=None, witness=None):
         if len(witness) != 0:
             raise ValueError('Invalid SLIP-0019 proof: witness is not empty for p2pkh')
         # extract the der signature and the pubkey from the scriptsig
-        der_sig, pubkey = slip19_parse_scriptsig(scriptsig)
+        der_sig, pubkey = slip19_parse_scriptsig(scriptsig, addr_fmt)
         # hash the pubkey and check that it matches the hash in the scriptPubKey
         if hash != hash160(pubkey):
             raise ValueError('Invalid SLIP-0019 proof: pubkey doesn\'t match the hash in the scriptPubKey')
         if not verify_all_recid(pubkey, sighash, der_sig):
             raise ValueError('Invalid SLIP-0019 proof: invalid signature for p2pkh')
     elif addr_fmt == AF_P2WPKH_P2SH:
-        pass
+        # Check that both the scriptsig and the witness are not empty
+        if len(scriptsig) == 0:
+            raise ValueError('Invalid SLIP-0019 proof: scriptsig is empty for p2sh-p2wpkh')
+        if len(witness) == 0:
+            raise ValueError('Invalid SLIP-0019 proof: witness is empty for p2sh-p2wpkh')
+
+        # check that the hash of the scriptsig matches the hash in the scriptPubKey
+        if hash != hash160(scriptsig[1:]):
+            raise ValueError('Invalid SLIP-0019 proof: redeem script doesn\'t match the hash in the scriptPubKey')
+        # extract the der signature and the pubkey from the witness
+        sigs, pubkeys, _ = slip19_parse_witness(witness)
+        der_sig = sigs[0]
+        pubkey = pubkeys[0]
+
+        # extract the pubkey_hash from the scriptsig
+        pubkey_hash = slip19_parse_scriptsig(scriptsig, addr_fmt)
+        # hash the pubkey and check that it matches the hash in the scriptPubKey
+        if pubkey_hash != hash160(pubkey):
+            raise ValueError('Invalid SLIP-0019 proof: pubkey doesn\'t match the hash in the scriptPubKey')
+
+        if not verify_all_recid(pubkey, sighash, der_sig):
+            raise ValueError('Invalid SLIP-0019 proof: invalid signature for p2sh-p2wpkh')
     elif addr_fmt == AF_P2WPKH:
         # Check that the scriptsig is empty and witness is not empty.
         if len(scriptsig) != 0:
@@ -251,11 +273,38 @@ def slip19_verify_signature(spk, sighash, scriptsig=None, witness=None):
             raise ValueError('Invalid SLIP-0019 proof: invalid signature for p2wpkh')
 
 # Utils
-def slip19_parse_scriptsig(scriptsig):
+def slip19_parse_scriptsig(scriptsig, addr_fmt):
     with BytesIO(scriptsig) as fd:
-        der_sig = deser_string(fd)
-        pubkey = deser_string(fd)
-        return der_sig, pubkey
+        if addr_fmt == AF_CLASSIC:
+            der_sig = deser_string(fd)
+            pubkey = deser_string(fd)
+            return der_sig, pubkey
+        elif addr_fmt == AF_P2WPKH_P2SH:
+            total_len = deser_compact_size(fd)
+            if total_len != 22:
+                raise ValueError('Invalid SLIP-0019 proof: invalid scriptsig length for p2sh-p2wpkh')
+            if fd.read(1) != b'\x00':
+                raise ValueError('Invalid SLIP-0019 proof: invalid witness version for p2sh-p2wpkh')
+            pubkey_hash = deser_string(fd)
+            return pubkey_hash
+        else:
+            raise NotImplementedError('Invalid SLIP-0019 proof: unknown address format')
+
+def slip19_parse_witness(witness):
+    with BytesIO(witness) as fd:
+        stack_size = deser_compact_size(fd)
+        sigs = []
+        pubkeys = []
+        scripts = []
+        for i in range(stack_size):
+            stack_item = deser_string(fd)
+            if stack_item[0] == 0x30:
+                sigs.append(stack_item)
+            elif stack_item[0] == 0x02 or stack_item[0] == 0x03:
+                pubkeys.append(stack_item)
+            else:
+                scripts.append(stack_item)
+        return sigs, pubkeys, scripts
 
 def recoverable_to_der(recoverable: ngu.secp256k1.Sig) -> Tuple[bytes, int]:
     sig_bytes = recoverable.to_bytes()
