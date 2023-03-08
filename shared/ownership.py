@@ -2,8 +2,8 @@
 # ownership.py - Proof of Ownership (SLIP-0019)
 #
 import ngu
-from serializations import CTxOut, ser_compact_size, ser_sig_der, deser_compact_size, SIGHASH_ALL, ser_string, deser_string, hash160
-from chains import verify_recover_pubkey, AF_P2WPKH, AF_CLASSIC, AF_P2WPKH_P2SH
+from serializations import CTxOut, ser_compact_size, ser_sig_der, deser_compact_size, SIGHASH_ALL, ser_string, deser_string, hash160, sha256
+from chains import verify_recover_pubkey, AF_P2WPKH, AF_CLASSIC, AF_P2WPKH_P2SH, AF_P2WSH
 from uio import BytesIO
 from utils import parse_addr_fmt_str
 
@@ -195,12 +195,15 @@ def slip19_create_multisig_proof(proof_body: bytes, signatures: list, witness_sc
 
 def slip19_verify_signature(spk, sighash, scriptsig=None, witness=None):
     # see https://github.com/bitcoin/bips/blob/f9e95849f337358cd89c83b948fbede3875481c3/bip-0322.mediawiki#user-content-Verifying
-    def verify_all_recid(pubkey, sighash, sig):
+    def verify_all_recid(pubkey, sighash, der_sig):
         # As we can't recover the recid, we need to try all 4 possibilities
         # if one pubkey we recover matches the pubkey we expect, we return True
         for recid in range(4):
             sig = der_to_recoverable(der_sig, recid)
-            _, r_pubkey = verify_recover_pubkey(sig, sighash)
+            try:
+                _, r_pubkey = verify_recover_pubkey(sig, sighash)
+            except ValueError: # it can happen with multisig, we don't care
+                break
             if r_pubkey == pubkey:
                 return True
         return False
@@ -271,6 +274,34 @@ def slip19_verify_signature(spk, sighash, scriptsig=None, witness=None):
             raise ValueError('Invalid SLIP-0019 proof: pubkey doesn\'t match the hash in the scriptPubKey')
         if not verify_all_recid(pubkey, sighash, der_sig):
             raise ValueError('Invalid SLIP-0019 proof: invalid signature for p2wpkh')
+    elif addr_fmt == AF_P2WSH:
+        # Check that the scriptsig is empty and witness is not empty.
+        if len(scriptsig) != 0:
+            raise ValueError('Invalid SLIP-0019 proof: scriptsig is not empty for p2wpkh')
+        if len(witness) == 0:
+            raise ValueError('Invalid SLIP-0019 proof: witness is empty for p2wpkh')
+        # extract the der signature and the pubkey from the witness
+        sigs, _, redeem_script = slip19_parse_witness(witness)
+
+        # check that the hash of the redeem script matches the hash in the scriptPubKey
+        if hash != sha256(redeem_script):
+            raise ValueError('Invalid SLIP-0019 proof: redeem script doesn\'t match the hash in the scriptPubKey')
+
+        # extract the pubkeys from the redeem script
+        n, pubkeys = slip19_parse_redeem_script(redeem_script)
+
+        valid_sig = 0
+        for s in sigs:
+            for pk in pubkeys:
+                if verify_all_recid(pk, sighash, s):
+                    valid_sig += 1
+                    break 
+                continue
+            if valid_sig == n:
+                break
+        
+        if valid_sig < n:
+            raise ValueError('Invalid SLIP-0019 proof: not enough valid signatures for p2wsh')
 
 # Utils
 def slip19_parse_scriptsig(scriptsig, addr_fmt):
@@ -295,16 +326,46 @@ def slip19_parse_witness(witness):
         stack_size = deser_compact_size(fd)
         sigs = []
         pubkeys = []
-        scripts = []
+        script = b''
         for i in range(stack_size):
+            if stack_size > 2 and i == 0: # it's a p2wsh, the first element is the witness version
+                if fd.read(1) != b'\x00':
+                    raise ValueError('Invalid SLIP-0019 proof: invalid witness version for p2wsh')
+                continue
             stack_item = deser_string(fd)
             if stack_item[0] == 0x30:
                 sigs.append(stack_item)
             elif stack_item[0] == 0x02 or stack_item[0] == 0x03:
                 pubkeys.append(stack_item)
             else:
-                scripts.append(stack_item)
-        return sigs, pubkeys, scripts
+                script = stack_item
+        return sigs, pubkeys, script
+
+def slip19_parse_redeem_script(redeem_script):
+    with BytesIO(redeem_script) as fd:
+        n = int.from_bytes(fd.read(1), 'little') - 80
+        # now go right to the end and look for the m value
+        fd.seek(-2, 2)
+        m = int.from_bytes(fd.read(1), 'little') - 80
+        if n > m:
+            raise ValueError('Invalid SLIP-0019 proof: invalid redeem script with n > m')
+        fd.seek(1)
+        pubkeys = []
+        # we should find m pubkeys
+        while len(pubkeys) < m:
+            p = deser_string(fd)
+            if p[0] == 0x02 or p[0] == 0x03:
+                pubkeys.append(p)
+            else:
+                raise ValueError('Invalid SLIP-0019 proof: Found non-pubkey in redeem script')
+        # now we should find the m value then OP_CHECKMULTISIG
+        if int.from_bytes(fd.read(1), 'little') - 80 != m:
+            raise ValueError('Invalid SLIP-0019 proof: invalid redeem script (too many pubkeys?)')
+        if fd.read(1) != b'\xae':
+            raise ValueError('Invalid SLIP-0019 proof: invalid redeem script (no OP_CHECKMULTISIG))')
+        if fd.read(1) != b'':
+            raise ValueError('Invalid SLIP-0019 proof: invalid redeem script (something after OP_CHECKMULTISIG))')
+        return n, pubkeys 
 
 def recoverable_to_der(recoverable: ngu.secp256k1.Sig) -> Tuple[bytes, int]:
     sig_bytes = recoverable.to_bytes()

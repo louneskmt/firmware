@@ -233,8 +233,6 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
             node = sv.derive_path(path)
             sig = ownership.slip19_signing_protocol(master_seed, node, proof_body, proof_footer)
             signatures.append(sig)
-            _, recovered_pub = verify_recover_pubkey(sig.to_bytes(), got_sighash) # we ignore the returned af as it's false
-            assert recovered_pub == node.pubkey(), "got %s, expected %s" % (b2a_hex(recovered_pub), b2a_hex(node.pubkey()))
 
     got_full_body = ownership.slip19_create_multisig_proof(proof_body, signatures, a2b_hex(witness_script))
 
@@ -242,6 +240,12 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
     assert got_proof_of_ownership == proof_of_ownership, "got_proof_of_ownership: %s, expected: %s" % (got_proof_of_ownership, proof_of_ownership)
 
     assert ownership.slip19_parse_proof_ownership(a2b_hex(got_proof_of_ownership)) == (user_confirmation, ownership_ids, a2b_hex(scriptsig), a2b_hex(witness)), "got %s, expected %s" % (ownership.slip19_parse_proof_ownership(a2b_hex(got_proof_of_ownership)), (user_confirmation, ownership_id, scriptsig, witness))
+
+    # verify the signature contained in the proof
+    try:
+        ownership.slip19_verify_signature(a2b_hex(script_pubkey), got_sighash, a2b_hex(scriptsig), a2b_hex(witness))
+    except ValueError as e:
+        assert False, "Failed to verify signature: %s" % (e)
 
 print('----')
 i = 0
