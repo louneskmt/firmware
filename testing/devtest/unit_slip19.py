@@ -93,9 +93,7 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
     seed.set_seed_value(words)
     seed.set_bip39_passphrase(passphrase)
 
-    master_seed = bip39.master_secret(words, passphrase)
-
-    got_ownership_key = ownership.slip19_ownership_key(master_seed)
+    got_ownership_key = ownership.slip19_ownership_key()
 
     got_ownership_key_str = b2a_hex(got_ownership_key).decode('utf-8')
     assert got_ownership_key_str == ownership_key
@@ -112,7 +110,7 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
 
     with stash.SensitiveValues() as sv:
         node = sv.derive_path(path)
-        sig = ownership.slip19_signing_protocol(master_seed, node, proof_body, proof_footer)
+        sig = ownership.slip19_signing_protocol(node, proof_body, proof_footer)
         der_sig, recid = ownership.recoverable_to_der(sig) 
         got_sig = ownership.der_to_recoverable(der_sig, recid) 
         assert got_sig == sig.to_bytes(), "got %s, expected %s" % (b2a_hex(got_sig), b2a_hex(sig.to_bytes()))
@@ -162,9 +160,9 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
     # compute all ownership_ids
     ownership_ids = []
     for i in range(len(words)):
-        master_seed = bip39.master_secret(words[i], passphrase[i])
-
-        got_ownership_key = ownership.slip19_ownership_key(master_seed)
+        seed.set_seed_value(words[i])
+        seed.set_bip39_passphrase(passphrase[i])
+        got_ownership_key = ownership.slip19_ownership_key()
 
         got_ownership_key_str = b2a_hex(got_ownership_key).decode('utf-8')
         assert got_ownership_key_str == ownership_key[i]
@@ -188,7 +186,7 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
         master_seed = bip39.master_secret(words[i], passphrase[i])
         with stash.SensitiveValues() as sv:
             node = sv.derive_path(path)
-            sig = ownership.slip19_signing_protocol(master_seed, node, proof_body, proof_footer)
+            sig = ownership.slip19_signing_protocol(node, proof_body, proof_footer)
             signatures.append(sig)
 
     got_full_body = ownership.slip19_create_multisig_proof(proof_body, signatures, a2b_hex(witness_script))
@@ -308,9 +306,10 @@ for words, ownership_proof, footer, is_our in proof_ownership_cases:
     print("proof ownership Test case #%d" % (i))
     i += 1
 
-    master_seed = bip39.master_secret(words, "")
+    seed.set_seed_value(words)
+    seed.set_bip39_passphrase("")
 
-    validator_ownership_key = ownership.slip19_ownership_key(master_seed)
+    validator_ownership_key = ownership.slip19_ownership_key()
 
     # parse the proof_of_ownership
     n, _, ownership_ids, scriptsig, witness = ownership.slip19_parse_proof_ownership(a2b_hex(ownership_proof))
