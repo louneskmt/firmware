@@ -122,10 +122,10 @@ def slip19_parse_proof_body(proof_body):
     return 5 + len(ser_compact_size(n)) + n*32, user_confirmation, ownership_ids
 
 def slip19_parse_proof_ownership(proof: bytes) -> Tuple[bool, bytes, bytes, bytes]:
-    n, user_confirmation, ownership_id = slip19_parse_proof_body(proof)
+    n, user_confirmation, ownership_ids = slip19_parse_proof_body(proof)
     scriptsig, witness = slip19_parse_proof_signature(proof[n:])
 
-    return user_confirmation, ownership_id, scriptsig, witness
+    return n, user_confirmation, ownership_ids, scriptsig, witness
 
 def slip19_parse_proof_footer(proof_footer):
     # Parse the footer of a SLIP-0019 proof of ownership.
