@@ -1,7 +1,7 @@
 #
 # ownership.py - Proof of Ownership (SLIP-0019)
 #
-import ngu
+import ngu, stash, bip39
 from serializations import CTxOut, ser_compact_size, ser_sig_der, deser_compact_size, SIGHASH_ALL, ser_string, deser_string, hash160, sha256
 from chains import verify_recover_pubkey, AF_P2WPKH, AF_CLASSIC, AF_P2WPKH_P2SH, AF_P2WSH
 from uio import BytesIO
@@ -32,10 +32,15 @@ def slip21_parse_path(path):
     # remove quotes and return
     return [i[1:-1] for i in path]
 
-def slip21_key_from_bip32_master_seed(master_seed, path):
+def slip21_key_from_bip32_master_seed(path):
     # Derive a SLIP-0021 key from a BIP-0032 master node and a label.
 
-    N = slip21_master_node(master_seed)
+    with stash.SensitiveValues() as sv:
+        words = bip39.b2a_words(sv.raw)
+        pw = stash.bip39_passphrase
+        master_seed = bip39.master_secret(words, pw)
+        N = slip21_master_node(master_seed)
+
     labels = slip21_parse_path(path)
 
     if labels:
@@ -50,9 +55,9 @@ def slip21_key_from_bip32_master_seed(master_seed, path):
 SLIP19_VERSION_MAGIC = b'\x53\x4c\x00\x19'
 SLIP19_OWNERSHIP_ID_PATH ='m/"SLIP-0019"/"Ownership identification key"'
 
-def slip19_ownership_key(master_seed):
+def slip19_ownership_key():
     # Derive a SLIP-0019 ownership key from a BIP-0032 master seed
-    return slip21_key_from_bip32_master_seed(master_seed, SLIP19_OWNERSHIP_ID_PATH)
+    return slip21_key_from_bip32_master_seed(SLIP19_OWNERSHIP_ID_PATH)
 
 def slip19_ownership_id(ownership_key, script_pubkey):
     # Derive a SLIP-0019 ownership ID from a SLIP-0019 ownership key and a scriptPubKey.
@@ -135,14 +140,14 @@ def slip19_parse_proof_footer(proof_footer):
 
     return script_pubkey, commitment_data
 
-def slip19_signing_protocol(master_seed, node, proof_body, proof_footer):
+def slip19_signing_protocol(node, proof_body, proof_footer):
     # The signing protocol of a SLIP-0019 proof of ownership.
 
     # Parse the proof body.
     _, user_confirmation, ownership_ids = slip19_parse_proof_body(proof_body)
 
     # Derive the ownership key.
-    ownership_key = slip19_ownership_key(master_seed)
+    ownership_key = slip19_ownership_key()
 
     # Parse the proof footer.
     script_pubkey, commitment_data = slip19_parse_proof_footer(proof_footer)
