@@ -308,6 +308,39 @@ def slip19_verify_signature(spk, sighash, scriptsig=None, witness=None):
         if valid_sig < n:
             raise ValueError('Invalid SLIP-0019 proof: not enough valid signatures for p2wsh')
 
+def slip19_check_ownership(proof:bytes, footer: bytes) -> bool:
+    """
+    Given the proof and the footer, confirm the signature and tells if the UTXO is ours or not
+    """
+    # parse the proof_of_ownership
+    n, _, ownership_ids, scriptsig, witness = slip19_parse_proof_ownership(proof)
+
+    # parse the footer
+    script_pubkey, _ = slip19_parse_proof_footer(footer)
+
+    proof_body = proof[:n]
+    # Compute the sighash
+    sighash = slip19_compile_sighash(proof_body, footer)
+
+    # verify the signature contained in the proof
+    try:
+        slip19_verify_signature(script_pubkey, sighash, scriptsig, witness)
+    except ValueError as e:
+        assert False, "Failed to verify signature: %s" % (e)
+
+    validator_ownership_key = slip19_ownership_key()
+
+    validator_ownership_id = slip19_ownership_id(validator_ownership_key, script_pubkey)
+
+    # verify that our ownership_id is not in the proof
+    for oid in ownership_ids:
+        if oid != validator_ownership_id:
+            continue
+        else:
+            return True
+
+    return False
+    
 # Utils
 def slip19_parse_scriptsig(scriptsig, addr_fmt):
     with BytesIO(scriptsig) as fd:

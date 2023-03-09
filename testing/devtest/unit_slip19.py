@@ -309,37 +309,10 @@ for words, ownership_proof, footer, is_our in proof_ownership_cases:
     seed.set_seed_value(words)
     seed.set_bip39_passphrase("")
 
-    validator_ownership_key = ownership.slip19_ownership_key()
-
-    # parse the proof_of_ownership
-    n, _, ownership_ids, scriptsig, witness = ownership.slip19_parse_proof_ownership(a2b_hex(ownership_proof))
-
-    # parse the footer
-    script_pubkey, _ = ownership.slip19_parse_proof_footer(a2b_hex(footer))
-
-    proof_body = a2b_hex(ownership_proof)[:n]
-    # Compute the sighash
-    sighash = ownership.slip19_compile_sighash(proof_body, a2b_hex(footer))
-
-    validator_ownership_id = ownership.slip19_ownership_id(validator_ownership_key, script_pubkey)
-
-    # verify the signature contained in the proof
     try:
-        ownership.slip19_verify_signature(script_pubkey, sighash, scriptsig, witness)
+        ours = ownership.slip19_check_ownership(a2b_hex(ownership_proof), a2b_hex(footer))
     except ValueError as e:
-        assert False, "Failed to verify signature: %s" % (e)
+        raise AssertionError("Failed to validate signature: %s" % (e))
 
-    # verify that our ownership_id is not in the proof
-    found_oid = False
-    for oid in ownership_ids:
-        if oid != validator_ownership_id:
-            continue
-        else:
-            found_oid = True
-            break
-    
-    if found_oid and not is_our:
-        assert False, "Found our ownership id in the proof, but we are not the owner"
-
-    if not found_oid and is_our:
-        assert False, "Did not find our ownership id in the proof, but we are the owner"
+    if ours != is_our:
+        raise AssertionError("Ownership check failed: got %s, expected %s" % (ours, is_our))
