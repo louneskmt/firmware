@@ -10,7 +10,7 @@ import ownership
 from ubinascii import hexlify as b2a_hex
 from ubinascii import unhexlify as a2b_hex
 import stash, seed
-from chains import verify_recover_pubkey, AF_P2WPKH, AF_P2WPKH_P2SH, AF_CLASSIC, AF_P2WSH
+from chains import AF_P2WPKH, AF_P2WPKH_P2SH, AF_CLASSIC, AF_P2WSH
 
 """
 (
@@ -85,68 +85,6 @@ cases = [
 )
 ]
 
-multisig_cases = [
-(
-    [
-        "all all all all all all all all all all all all",
-        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
-        "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong",
-    ],
-    [
-        "",
-        "",
-        "",
-    ],
-    [
-        "0a115a171e30f8a740bae6c4144bec5dc1099ffa79b83dfb8aa3501d094de585",
-        "cd50559c65666fd381e823b82fff04763465062c1ff4c93d3e147a306f884130",
-        "64b3e4f003fd7dea4168dd19f85410ac3b1844abd1d7f9f3a74254a7852af725",
-    ],
-    AF_P2WSH,
-    "m/84'/0'/0'/1/0",
-    "00209149b5bcaae8c876f1997ef6b60ec197475217fd3e736d4c54fcf49fe4f5213a",
-    False,
-    "TREZOR",
-    "d2cca14e9ea31a5e4bb36e6e5813adf31f8744bc6da09680e3a0d69e5c8dddb1",
-    "",
-    "04004830450221009d8cd2d792633732b3a406ea86072e94c72c0d1ffb5ddde466993ee2142eeef502206fa9c6273ab35400ebf689028ebcf8d2031edb3326106339e92d499652dc43030147304402205fae1218bc4600ad6c28b6093e8f3757603681b024e60f1d92fca579bfce210b022011d6f1c6ef1c7f7601f635ed237dafc774386dd9f4be0aef85e3af3f095d8a9201695221032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b2103025324888e429ab8e3dbaf1f7802648b9cd01e9b418485c5fa4c1b9b5700e1a621033057150eb57e2b21d69866747f3d377e928f864fa88ecc5ddb1c0e501cce3f8153ae",
-    "534c00190003309c4ffec5c228cc836b51d572c0a730dbabd39df9f01862502ac9eabcdeb94a46307177b959c48bf2eb516e0463bb651aad388c7f8f597320df7854212fa3443892f9573e08cedff9160b243759520733a980fed45b131a8bba171317ae5d940004004830450221009d8cd2d792633732b3a406ea86072e94c72c0d1ffb5ddde466993ee2142eeef502206fa9c6273ab35400ebf689028ebcf8d2031edb3326106339e92d499652dc43030147304402205fae1218bc4600ad6c28b6093e8f3757603681b024e60f1d92fca579bfce210b022011d6f1c6ef1c7f7601f635ed237dafc774386dd9f4be0aef85e3af3f095d8a9201695221032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b2103025324888e429ab8e3dbaf1f7802648b9cd01e9b418485c5fa4c1b9b5700e1a621033057150eb57e2b21d69866747f3d377e928f864fa88ecc5ddb1c0e501cce3f8153ae",
-    "5221032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b2103025324888e429ab8e3dbaf1f7802648b9cd01e9b418485c5fa4c1b9b5700e1a621033057150eb57e2b21d69866747f3d377e928f864fa88ecc5ddb1c0e501cce3f8153ae",
-    [0,2]
-)
-]
-
-"""
-(
-    Test name,
-    proof_body,
-    expected user confirmation,
-    expected ownership id(s)
-)
-"""
-proof_body_cases = [
-(
-    "Valid",
-    "534c00190001a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad5707",
-    False,
-    [
-        "a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad5707"
-    ]
-),
-(
-    "Wrong Magic",
-    "534c00180001a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad5707",
-    False,
-    []
-),
-(
-    "Wrong Flag",
-    "534c0019ab01a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad5707",
-    False,
-    []
-),
-]
-
 print('----')
 i = 0
 for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confirmation, commitment_data, sighash, scriptsig, witness, proof_of_ownership in cases:
@@ -184,17 +122,36 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
         got_proof_of_ownership = b2a_hex(got_full_body).decode('utf-8')
         assert got_proof_of_ownership == proof_of_ownership, "got_proof_of_ownership: %s, expected: %s" % (got_proof_of_ownership, proof_of_ownership)
 
-        _, recovered_pub = verify_recover_pubkey(sig.to_bytes(), got_sighash) # we ignore the returned af as it's false
-        assert recovered_pub == node.pubkey(), "got %s, expected %s" % (b2a_hex(recovered_pub), b2a_hex(node.pubkey()))
-
-        # parse the proof_of_ownership
-        assert ownership.slip19_parse_proof_ownership(a2b_hex(got_proof_of_ownership)) == (user_confirmation, [ownership_id], a2b_hex(scriptsig), a2b_hex(witness)), "got %s, expected %s" % (ownership.slip19_parse_proof_ownership(a2b_hex(got_proof_of_ownership)), (user_confirmation, ownership_id, scriptsig, witness))
-
-        # verify the signature contained in the proof
-        try:
-            ownership.slip19_verify_signature(a2b_hex(script_pubkey), got_sighash, a2b_hex(scriptsig), a2b_hex(witness))
-        except ValueError as e:
-            assert False, "Failed to verify signature: %s" % (e)
+multisig_cases = [
+(
+    [
+        "all all all all all all all all all all all all",
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+        "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong",
+    ],
+    [
+        "",
+        "",
+        "",
+    ],
+    [
+        "0a115a171e30f8a740bae6c4144bec5dc1099ffa79b83dfb8aa3501d094de585",
+        "cd50559c65666fd381e823b82fff04763465062c1ff4c93d3e147a306f884130",
+        "64b3e4f003fd7dea4168dd19f85410ac3b1844abd1d7f9f3a74254a7852af725",
+    ],
+    AF_P2WSH,
+    "m/84'/0'/0'/1/0",
+    "00209149b5bcaae8c876f1997ef6b60ec197475217fd3e736d4c54fcf49fe4f5213a",
+    False,
+    "TREZOR",
+    "d2cca14e9ea31a5e4bb36e6e5813adf31f8744bc6da09680e3a0d69e5c8dddb1",
+    "",
+    "04004830450221009d8cd2d792633732b3a406ea86072e94c72c0d1ffb5ddde466993ee2142eeef502206fa9c6273ab35400ebf689028ebcf8d2031edb3326106339e92d499652dc43030147304402205fae1218bc4600ad6c28b6093e8f3757603681b024e60f1d92fca579bfce210b022011d6f1c6ef1c7f7601f635ed237dafc774386dd9f4be0aef85e3af3f095d8a9201695221032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b2103025324888e429ab8e3dbaf1f7802648b9cd01e9b418485c5fa4c1b9b5700e1a621033057150eb57e2b21d69866747f3d377e928f864fa88ecc5ddb1c0e501cce3f8153ae",
+    "534c00190003309c4ffec5c228cc836b51d572c0a730dbabd39df9f01862502ac9eabcdeb94a46307177b959c48bf2eb516e0463bb651aad388c7f8f597320df7854212fa3443892f9573e08cedff9160b243759520733a980fed45b131a8bba171317ae5d940004004830450221009d8cd2d792633732b3a406ea86072e94c72c0d1ffb5ddde466993ee2142eeef502206fa9c6273ab35400ebf689028ebcf8d2031edb3326106339e92d499652dc43030147304402205fae1218bc4600ad6c28b6093e8f3757603681b024e60f1d92fca579bfce210b022011d6f1c6ef1c7f7601f635ed237dafc774386dd9f4be0aef85e3af3f095d8a9201695221032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b2103025324888e429ab8e3dbaf1f7802648b9cd01e9b418485c5fa4c1b9b5700e1a621033057150eb57e2b21d69866747f3d377e928f864fa88ecc5ddb1c0e501cce3f8153ae",
+    "5221032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b2103025324888e429ab8e3dbaf1f7802648b9cd01e9b418485c5fa4c1b9b5700e1a621033057150eb57e2b21d69866747f3d377e928f864fa88ecc5ddb1c0e501cce3f8153ae",
+    [0,2]
+)
+]
 
 print('----')
 i = 0
@@ -239,13 +196,36 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
     got_proof_of_ownership = b2a_hex(got_full_body).decode('utf-8')
     assert got_proof_of_ownership == proof_of_ownership, "got_proof_of_ownership: %s, expected: %s" % (got_proof_of_ownership, proof_of_ownership)
 
-    assert ownership.slip19_parse_proof_ownership(a2b_hex(got_proof_of_ownership)) == (user_confirmation, ownership_ids, a2b_hex(scriptsig), a2b_hex(witness)), "got %s, expected %s" % (ownership.slip19_parse_proof_ownership(a2b_hex(got_proof_of_ownership)), (user_confirmation, ownership_id, scriptsig, witness))
-
-    # verify the signature contained in the proof
-    try:
-        ownership.slip19_verify_signature(a2b_hex(script_pubkey), got_sighash, a2b_hex(scriptsig), a2b_hex(witness))
-    except ValueError as e:
-        assert False, "Failed to verify signature: %s" % (e)
+"""
+(
+    Test name,
+    proof_body,
+    expected user confirmation,
+    expected ownership id(s)
+)
+"""
+proof_body_cases = [
+(
+    "Valid",
+    "534c00190001a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad5707",
+    False,
+    [
+        "a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad5707"
+    ]
+),
+(
+    "Wrong Magic",
+    "534c00180001a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad5707",
+    False,
+    []
+),
+(
+    "Wrong Flag",
+    "534c0019ab01a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad5707",
+    False,
+    []
+),
+]
 
 print('----')
 i = 0
@@ -276,3 +256,91 @@ for name, proof_body_hex, user_confirmation, ownership_ids_hex in proof_body_cas
         print("Successfully caught exception %s: %s for case %s" % (e.__class__.__name__, e,name))
         continue
     raise Exception("Didn't raise exception for case %s" % (name))
+
+"""
+    words,
+    proof_ownsership,
+    proof_footer,
+    is_our,
+"""
+proof_ownership_cases = [
+(
+    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+    "534c00190001a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad57070002483045022100c0dc28bb563fc5fea76cacff75dba9cb4122412faae01937cdebccfb065f9a7002202e980bfbd8a434a7fc4cd2ca49da476ce98ca097437f8159b1a386b41fcdfac50121032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b",
+    "160014b2f771c370ccf219cd3059cda92bdf7f00cf210300",
+    False,
+),
+(
+    "all all all all all all all all all all all all",
+    "534c00190001a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad57070002483045022100c0dc28bb563fc5fea76cacff75dba9cb4122412faae01937cdebccfb065f9a7002202e980bfbd8a434a7fc4cd2ca49da476ce98ca097437f8159b1a386b41fcdfac50121032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b",
+    "160014b2f771c370ccf219cd3059cda92bdf7f00cf210300",
+    True,
+),
+(
+    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+    "534c0019010192caf0b8daf78f1d388dbbceaec34bd2dabc31b217e32343663667f6694a3f4617160014e0cffbee1925a411844f44c3b8d81365ab51d0360247304402207f1003c59661ddf564af2e10d19ad8d6a1a47ad30e7052197d95fd65d186a67802205f0a804509980fec1b063554aadd8fb871d7c9fe934087cba2da09cbeff8531c012103a961687895a78da9aef98eed8e1f2a3e91cfb69d2f3cf11cbd0bb1773d951928",
+    "17a914b9ddc52a7d95ad46d474bfc7186d0150e15a499187065452455a4f52",
+    False,
+),
+(
+    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+    "534c00190001ccc49ac5fede0efc80725fbda8b763d4e62a221c51cc5425076cffa7722c0bda6b483045022100e818002d0a85438a7f2140503a6aa0a6af6002fa956d0101fd3db24e776e546f0220430fd59dc1498bc96ab6e71a4829b60224828cf1fc35edc98e0973db203ca3f0012102f63159e21fbcb54221ec993def967ad2183a9c243c8bff6e7d60f4d5ed3b386500",
+    "1976a9145a4deff88ada6705ed70835bc0db56a124b9cdcd88ac00",
+    False,
+),
+(
+    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+    "534c00190003309c4ffec5c228cc836b51d572c0a730dbabd39df9f01862502ac9eabcdeb94a46307177b959c48bf2eb516e0463bb651aad388c7f8f597320df7854212fa3443892f9573e08cedff9160b243759520733a980fed45b131a8bba171317ae5d940004004830450221009d8cd2d792633732b3a406ea86072e94c72c0d1ffb5ddde466993ee2142eeef502206fa9c6273ab35400ebf689028ebcf8d2031edb3326106339e92d499652dc43030147304402205fae1218bc4600ad6c28b6093e8f3757603681b024e60f1d92fca579bfce210b022011d6f1c6ef1c7f7601f635ed237dafc774386dd9f4be0aef85e3af3f095d8a9201695221032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b2103025324888e429ab8e3dbaf1f7802648b9cd01e9b418485c5fa4c1b9b5700e1a621033057150eb57e2b21d69866747f3d377e928f864fa88ecc5ddb1c0e501cce3f8153ae",
+    "2200209149b5bcaae8c876f1997ef6b60ec197475217fd3e736d4c54fcf49fe4f5213a065452455a4f52",
+    True,
+),
+(
+    "legal winner thank year wave sausage worth useful legal winner thank yellow",
+    "534c00190003309c4ffec5c228cc836b51d572c0a730dbabd39df9f01862502ac9eabcdeb94a46307177b959c48bf2eb516e0463bb651aad388c7f8f597320df7854212fa3443892f9573e08cedff9160b243759520733a980fed45b131a8bba171317ae5d940004004830450221009d8cd2d792633732b3a406ea86072e94c72c0d1ffb5ddde466993ee2142eeef502206fa9c6273ab35400ebf689028ebcf8d2031edb3326106339e92d499652dc43030147304402205fae1218bc4600ad6c28b6093e8f3757603681b024e60f1d92fca579bfce210b022011d6f1c6ef1c7f7601f635ed237dafc774386dd9f4be0aef85e3af3f095d8a9201695221032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b2103025324888e429ab8e3dbaf1f7802648b9cd01e9b418485c5fa4c1b9b5700e1a621033057150eb57e2b21d69866747f3d377e928f864fa88ecc5ddb1c0e501cce3f8153ae",
+    "2200209149b5bcaae8c876f1997ef6b60ec197475217fd3e736d4c54fcf49fe4f5213a065452455a4f52",
+    False,
+),
+]
+
+print('----')
+i = 0
+for words, ownership_proof, footer, is_our in proof_ownership_cases:
+    print("proof ownership Test case #%d" % (i))
+    i += 1
+
+    master_seed = bip39.master_secret(words, "")
+
+    validator_ownership_key = ownership.slip19_ownership_key(master_seed)
+
+    # parse the proof_of_ownership
+    n, _, ownership_ids, scriptsig, witness = ownership.slip19_parse_proof_ownership(a2b_hex(ownership_proof))
+
+    # parse the footer
+    script_pubkey, _ = ownership.slip19_parse_proof_footer(a2b_hex(footer))
+
+    proof_body = a2b_hex(ownership_proof)[:n]
+    # Compute the sighash
+    sighash = ownership.slip19_compile_sighash(proof_body, a2b_hex(footer))
+
+    validator_ownership_id = ownership.slip19_ownership_id(validator_ownership_key, script_pubkey)
+
+    # verify the signature contained in the proof
+    try:
+        ownership.slip19_verify_signature(script_pubkey, sighash, scriptsig, witness)
+    except ValueError as e:
+        assert False, "Failed to verify signature: %s" % (e)
+
+    # verify that our ownership_id is not in the proof
+    found_oid = False
+    for oid in ownership_ids:
+        if oid != validator_ownership_id:
+            continue
+        else:
+            found_oid = True
+            break
+    
+    if found_oid and not is_our:
+        assert False, "Found our ownership id in the proof, but we are not the owner"
+
+    if not found_oid and is_our:
+        assert False, "Did not find our ownership id in the proof, but we are the owner"
