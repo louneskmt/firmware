@@ -5,12 +5,12 @@
 #
 #   execfile('../../testing/devtest/unit_slip21.py')
 #
-import bip39
 import ownership
 from ubinascii import hexlify as b2a_hex
 from ubinascii import unhexlify as a2b_hex
 import stash, seed
 from chains import AF_P2WPKH, AF_P2WPKH_P2SH, AF_CLASSIC, AF_P2WSH
+from serializations import ser_sig_der, deser_der_sig
 
 """
 (
@@ -71,7 +71,7 @@ cases = [
     "483045022100e818002d0a85438a7f2140503a6aa0a6af6002fa956d0101fd3db24e776e546f0220430fd59dc1498bc96ab6e71a4829b60224828cf1fc35edc98e0973db203ca3f0012102f63159e21fbcb54221ec993def967ad2183a9c243c8bff6e7d60f4d5ed3b3865",
     "",
     "534c00190001ccc49ac5fede0efc80725fbda8b763d4e62a221c51cc5425076cffa7722c0bda6b483045022100e818002d0a85438a7f2140503a6aa0a6af6002fa956d0101fd3db24e776e546f0220430fd59dc1498bc96ab6e71a4829b60224828cf1fc35edc98e0973db203ca3f0012102f63159e21fbcb54221ec993def967ad2183a9c243c8bff6e7d60f4d5ed3b386500"
-# ),
+)
 # (
 #     "all all all all all all all all all all all all",
 #     "",
@@ -82,7 +82,7 @@ cases = [
 #     "",
 #     "331a936e0a94d8ec7a105507dbdd445d6cd6a516d53c0bfd83769bdac1950483",
 #     "534c00190001dc18066224b9e30e306303436dc18ab881c7266c13790350a3fe415e438135ec000140647d6af883107a870417e808abe424882bd28ee04a28ba85a7e99400e1b9485075733695964c2a0fa02d4439ab80830e9566ccbd10f2597f5513eff9f03a0497"
-)
+# )
 ]
 
 print('----')
@@ -94,6 +94,7 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
     seed.set_bip39_passphrase(passphrase)
 
     got_ownership_key = ownership.slip19_ownership_key()
+    print("got_ownership_key: %s" % b2a_hex(got_ownership_key).decode('utf-8'))
 
     got_ownership_key_str = b2a_hex(got_ownership_key).decode('utf-8')
     assert got_ownership_key_str == ownership_key
@@ -101,9 +102,9 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
     ownership_id = ownership.slip19_ownership_id(got_ownership_key, a2b_hex(script_pubkey))
     ownership_ids = [ownership_id]
 
-    proof_body = ownership.slip19_compile_proof_body(ownership_ids, user_confirmation)
-    proof_footer = ownership.slip19_compile_proof_footer(a2b_hex(script_pubkey), a2b_hex(b2a_hex(commitment_data)))
-    got_sighash = ownership.slip19_compile_sighash(proof_body, proof_footer)
+    proof_body = ownership.slip19_serialize_body(ownership_ids, user_confirmation)
+    proof_footer = ownership.slip19_serialize_footer(a2b_hex(script_pubkey), a2b_hex(b2a_hex(commitment_data)))
+    got_sighash = ownership.slip19_compute_sighash(proof_body, proof_footer)
 
     got_sighash_str = b2a_hex(got_sighash).decode('utf-8')
     assert got_sighash_str == sighash, "got_sighash_str: %s, expected: %s" % (got_sighash_str, sighash)
@@ -111,10 +112,10 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
     with stash.SensitiveValues() as sv:
         node = sv.derive_path(path)
         sig = ownership.slip19_signing_protocol(node, proof_body, proof_footer)
-        der_sig, recid = ownership.recoverable_to_der(sig) 
-        got_sig = ownership.der_to_recoverable(der_sig, recid) 
-        assert got_sig == sig.to_bytes(), "got %s, expected %s" % (b2a_hex(got_sig), b2a_hex(sig.to_bytes()))
-        proof_signature = ownership.slip19_produce_proof(node, addr_fmt, sig)
+        der_sig, recid = ser_sig_der(sig)
+        got_sig = deser_der_sig(der_sig, recid)
+        assert got_sig == sig, "got %s, expected %s" % (b2a_hex(got_sig), b2a_hex(sig))
+        proof_signature = ownership.slip19_produce_proof(node, sig, addr_fmt)
         got_full_body = proof_body + proof_signature
 
         got_proof_of_ownership = b2a_hex(got_full_body).decode('utf-8')
@@ -171,9 +172,9 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
         # print(b2a_hex(ownership_id).decode('utf-8'))
         ownership_ids.append(ownership_id)
 
-    proof_body = ownership.slip19_compile_proof_body(ownership_ids, user_confirmation)
-    proof_footer = ownership.slip19_compile_proof_footer(a2b_hex(script_pubkey), a2b_hex(b2a_hex(commitment_data)))
-    got_sighash = ownership.slip19_compile_sighash(proof_body, proof_footer)
+    proof_body = ownership.slip19_serialize_body(ownership_ids, user_confirmation)
+    proof_footer = ownership.slip19_serialize_footer(a2b_hex(script_pubkey), a2b_hex(b2a_hex(commitment_data)))
+    got_sighash = ownership.slip19_compute_sighash(proof_body, proof_footer)
 
     got_sighash_str = b2a_hex(got_sighash).decode('utf-8')
     assert got_sighash_str == sighash, "got_sighash_str: %s, expected: %s" % (got_sighash_str, sighash)
@@ -183,13 +184,12 @@ for words, passphrase, ownership_key, addr_fmt, path, script_pubkey, user_confir
     for i in signers:
         seed.set_seed_value(words[i])
         seed.set_bip39_passphrase(passphrase[i])
-        master_seed = bip39.master_secret(words[i], passphrase[i])
         with stash.SensitiveValues() as sv:
             node = sv.derive_path(path)
             sig = ownership.slip19_signing_protocol(node, proof_body, proof_footer)
             signatures.append(sig)
 
-    got_full_body = ownership.slip19_create_multisig_proof(proof_body, signatures, a2b_hex(witness_script))
+    got_full_body = ownership.slip19_produce_multisig_proof(proof_body, signatures, a2b_hex(witness_script))
 
     got_proof_of_ownership = b2a_hex(got_full_body).decode('utf-8')
     assert got_proof_of_ownership == proof_of_ownership, "got_proof_of_ownership: %s, expected: %s" % (got_proof_of_ownership, proof_of_ownership)
@@ -238,14 +238,14 @@ for name, proof_body_hex, user_confirmation, ownership_ids_hex in proof_body_cas
         ownership_ids.append(a2b_hex(id))
 
     if "Valid" in name:
-        _, got_user_confirmation, got_ownership_ids = ownership.slip19_parse_proof_body(proof_body)
+        _, got_user_confirmation, got_ownership_ids = ownership.slip19_deserialize_body(proof_body)
         assert got_user_confirmation == user_confirmation, "got %s, expected %s" % (got_user_confirmation, user_confirmation)
         for i, id in enumerate(ownership_ids):
             assert got_ownership_ids[i] == id, "got %s, expected %s" % (got_ownership_ids[i], id)
         continue
 
     try:
-        _, got_user_confirmation, got_ownership_ids = ownership.slip19_parse_proof_body(proof_body)
+        _, got_user_confirmation, got_ownership_ids = ownership.slip19_deserialize_body(proof_body)
     except ValueError as e:
         if name == "Wrong Magic":
             assert e.__class__.__name__ == "ValueError", "Wrong exception %s for test \"%s\"" % (e.__class__.__name__, name)
@@ -257,7 +257,7 @@ for name, proof_body_hex, user_confirmation, ownership_ids_hex in proof_body_cas
 
 """
     words,
-    proof_ownsership,
+    proof_ownership,
     proof_footer,
     is_our,
 """
@@ -310,7 +310,8 @@ for words, ownership_proof, footer, is_our in proof_ownership_cases:
     seed.set_bip39_passphrase("")
 
     try:
-        ours = ownership.slip19_check_ownership(a2b_hex(ownership_proof), a2b_hex(footer))
+        script_pubkey, commitment_data = ownership.slip19_deserialize_footer(a2b_hex(footer))
+        ours = ownership.slip19_check_ownership(a2b_hex(ownership_proof), script_pubkey, commitment_data)
     except ValueError as e:
         raise AssertionError("Failed to validate signature: %s" % (e))
 

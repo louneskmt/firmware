@@ -1,4 +1,4 @@
-# Additions Copyright 2018-2021 by Coinkite Inc. 
+# Additions Copyright 2018-2021 by Coinkite Inc.
 # Copyright (c) 2010 ArtForz -- public domain half-a-node
 # Copyright (c) 2012 Jeff Garzik
 # Copyright (c) 2010-2016 The Bitcoin Core developers
@@ -19,6 +19,7 @@ from ubinascii import hexlify as b2a_hex
 from ubinascii import unhexlify as a2b_hex
 import ustruct as struct
 import ngu
+from uio import BytesIO
 from opcodes import *
 
 # single-shot hash functions
@@ -229,11 +230,19 @@ def disassemble(script):
                 yield (None, c)
     except:
         raise ValueError("bad script")
-        
 
-def ser_sig_der(r, s, sighash_type=1):
+def deser_sig_vrs(sig):
+    v = sig[0:1]
+    r = sig[1:33]
+    s = sig[33:65]
+    return v, r, s
+
+def ser_sig_der(sig, sighash_type=1):
+    v, r, s = deser_sig_vrs(sig)
+    recid = int.from_bytes(v, 'big') - 27 & 3
+
     # Take R and S values from a signature and encode into DER format.
-    sig = b"\x30"
+    der = b"\x30"
 
     # Make r and s as short as possible
     ri = 0
@@ -259,21 +268,56 @@ def ser_sig_der(r, s, sighash_type=1):
 
     # Write total length
     total_len = len(r) + len(s) + 4
-    sig += struct.pack("B", total_len)
+    der += struct.pack("B", total_len)
 
     # write r
-    sig += b"\x02"
-    sig += struct.pack("B", len(r))
-    sig += r
+    der += b"\x02"
+    der += struct.pack("B", len(r))
+    der += r
 
     # write s
-    sig += b"\x02"
-    sig += struct.pack("B", len(s))
-    sig += s
+    der += b"\x02"
+    der += struct.pack("B", len(s))
+    der += s
 
-    sig += struct.pack("B", sighash_type)
+    der += struct.pack("B", sighash_type)
 
-    return sig
+    return der, recid
+
+def deser_der_sig(der, recid=0):
+    with BytesIO(der) as fd:
+        if fd.read(1) != b'\x30':
+            raise ValueError("Invalid der sig: invalid header byte")
+
+        total_len = deser_compact_size(fd)
+        count = 0
+
+        if fd.read(1) != b'\x02':
+            raise ValueError("Invalid der sig: invalid r byte")
+
+        r = deser_string(fd)
+        count += 1 + len(ser_compact_size(len(r))) + len(r)
+
+        if fd.read(1) != b'\x02':
+            raise ValueError("Invalid der sig: invalid s byte")
+
+        s = deser_string(fd)
+        count += 1 + len(ser_compact_size(len(s))) + len(s)
+
+        if count != total_len:
+            raise ValueError("Invalid der sig: invalid length")
+
+        if fd.read(1) != b'\x01':
+            raise ValueError("Invalid der sig: invalid sighash byte (not SIGHASH_ALL)")
+
+        while len(r) > 32 and r[0] == 0:
+            r = r[1:]
+        while len(s) > 32 and s[0] == 0:
+            s = s[1:]
+
+        prefix = 27 + 4 + recid
+
+    return prefix.to_bytes(1, 'big') + r + s
 
 def ser_sig_compact(r, s, recid):
     rec = struct.unpack("B", recid)[0]

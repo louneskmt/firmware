@@ -5,7 +5,7 @@
 #
 #   execfile('../../testing/devtest/unit_slip19.py')
 #
-import bip39
+import seed
 import ownership
 from ubinascii import hexlify as b2a_hex
 from ubinascii import unhexlify as a2b_hex
@@ -26,10 +26,11 @@ cases = [
 ]
 
 mnemonic = "all all all all all all all all all all all all"
-seed = bip39.master_secret(mnemonic)
 
 for path, key in cases:
-    got_key = ownership.slip21_key_from_bip32_master_seed(seed, path)
+    seed.set_seed_value(mnemonic)
+
+    got_key = ownership.slip21_key_from_bip32_master_seed(path)
     got_key = b2a_hex(got_key).decode('utf-8')
 
     assert got_key == key
