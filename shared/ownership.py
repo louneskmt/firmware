@@ -2,10 +2,12 @@
 # ownership.py - Proof of Ownership (SLIP-0019)
 #
 import ngu, stash, bip39
-from serializations import CTxOut, ser_compact_size, deser_compact_size, ser_sig_der, deser_der_sig, ser_string, deser_string, hash160, sha256
+from serializations import CTxOut, ser_compact_size, deser_compact_size, ser_sig_der, deser_der_sig, ser_string, deser_string, deser_string_vector, hash160, sha256
 from chains import verify_recover_pubkey, AF_P2WPKH, AF_CLASSIC, AF_P2WPKH_P2SH, AF_P2WSH
 from uio import BytesIO
 from utils import parse_addr_fmt_str
+from multisig import disassemble_multisig
+from ubinascii import hexlify as b2a_hex
 
 # SLIP-0021 - Symmetric Key Derivation for HD Wallets
 # See https://github.com/satoshilabs/slips/blob/master/slip-0021.md
@@ -337,7 +339,7 @@ def slip19_verify_signature(spk, sighash, scriptsig=None, witness=None):
             raise ValueError('Invalid SLIP-0019 proof: redeem script doesn\'t match the hash in the scriptPubKey')
 
         # Extract the pubkeys from the redeem script
-        m, pubkeys = slip19_parse_redeem_script_multisig(redeem_script)
+        m, _, pubkeys = disassemble_multisig(redeem_script)
 
         # Verify the signatures and that there are enough of them
         valid_sigs_count = 0
@@ -403,62 +405,19 @@ def slip19_parse_scriptsig(scriptsig, addr_fmt):
 
 def slip19_parse_witness(witness):
     with BytesIO(witness) as fd:
-        stack_size = deser_compact_size(fd)
-        sigs = []
-        pubkeys = []
+
         script = b''
 
-        for i in range(stack_size):
-            if stack_size > 2 and i == 0: # p2wsh, the first element is the witness version
-                if fd.read(1) != b'\x00':
-                    raise ValueError('Invalid SLIP-0019 proof: invalid witness version for p2wsh')
-                continue
+        stack_items = deser_string_vector(fd)
+        stack_size = len(stack_items)
 
-            stack_item = deser_string(fd)
-            if stack_item[0] == 0x30:
-                sigs.append(stack_item)
-            elif stack_item[0] == 0x02 or stack_item[0] == 0x03:
-                pubkeys.append(stack_item)
-            else:
-                script = stack_item
+        if stack_size > 2: # p2wsh, the first element is the witness version
+            if stack_items[0] != b'':
+                raise ValueError('Invalid SLIP-0019 proof: invalid witness version for p2wsh')
+            stack_items = stack_items[1:]
+
+        sigs = list(filter(lambda item: item[0] == 0x30, stack_items))
+        pubkeys = list(filter(lambda item: item[0] == 0x02 or item[0] == 0x03, stack_items))
+        script = stack_items[-1] if stack_items[-1] not in sigs + pubkeys else b''
 
     return sigs, pubkeys, script
-
-def slip19_parse_redeem_script_multisig(redeem_script):
-    # Parse the redeem script of a p2wsh multisig
-    # It should be of the form:
-    # <m> <pubkey1> <pubkey2> ... <pubkeyn> <n> OP_CHECKMULTISIG
-
-    with BytesIO(redeem_script) as fd:
-        # Parse the minimum required signatures
-        m = int.from_bytes(fd.read(1), 'little') - 80
-
-        # Go back two bytes from the end and parse the total number of pubkeys
-        fd.seek(-2, 2) # 2 = SEEK_END
-        n = int.from_bytes(fd.read(1), 'little') - 80
-
-        if m > n:
-            raise ValueError('Invalid SLIP-0019 proof: invalid redeem script with m > n')
-
-        # Go back to the beginning of the redeem script
-        fd.seek(1)
-
-        # We should find n pubkeys
-        pubkeys = []
-        while len(pubkeys) < n:
-            p = deser_string(fd)
-
-            if p[0] == 0x02 or p[0] == 0x03:
-                pubkeys.append(p)
-            else:
-                raise ValueError('Invalid SLIP-0019 proof: Found non-public key in redeem script')
-
-        # Now, we should find the n value then OP_CHECKMULTISIG
-        if int.from_bytes(fd.read(1), 'little') - 80 != n:
-            raise ValueError('Invalid SLIP-0019 proof: invalid redeem script (too many pubkeys?)')
-        if fd.read(1) != b'\xae':
-            raise ValueError('Invalid SLIP-0019 proof: invalid redeem script (no OP_CHECKMULTISIG))')
-        if fd.read(1) != b'':
-            raise ValueError('Invalid SLIP-0019 proof: invalid redeem script (something after OP_CHECKMULTISIG))')
-
-    return m, pubkeys
