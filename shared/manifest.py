@@ -32,6 +32,7 @@ freeze_as_mpy('', [
 	'numpad.py',
 	'nvstore.py',
 	'opcodes.py',
+	'ownership.py',
 	'paper.py',
 	'pincodes.py',
 	'psbt.py',
