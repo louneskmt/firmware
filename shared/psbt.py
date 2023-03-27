@@ -16,13 +16,14 @@ from serializations import ser_compact_size, deser_compact_size, hash160, hash25
 from serializations import CTxIn, CTxInWitness, CTxOut, SIGHASH_ALL, ser_uint256
 from serializations import ser_sig_der, uint256_from_str, ser_push_data, uint256_from_str
 from serializations import ser_string
+from ownership import slip19_check_ownership
 from glob import settings
 
 from public_constants import (
-    PSBT_GLOBAL_UNSIGNED_TX, PSBT_GLOBAL_XPUB, PSBT_IN_NON_WITNESS_UTXO, PSBT_IN_WITNESS_UTXO,
+    PSBT_GLOBAL_UNSIGNED_TX, PSBT_GLOBAL_XPUB, PSBT_GLOBAL_OWNERSHIP_COMMITMENT, PSBT_IN_NON_WITNESS_UTXO, PSBT_IN_WITNESS_UTXO,
     PSBT_IN_PARTIAL_SIG, PSBT_IN_SIGHASH_TYPE, PSBT_IN_REDEEM_SCRIPT,
     PSBT_IN_WITNESS_SCRIPT, PSBT_IN_BIP32_DERIVATION, PSBT_IN_FINAL_SCRIPTSIG,
-    PSBT_IN_FINAL_SCRIPTWITNESS, PSBT_OUT_REDEEM_SCRIPT, PSBT_OUT_WITNESS_SCRIPT,
+    PSBT_IN_FINAL_SCRIPTWITNESS, PSBT_IN_OWNERSHIP_PROOF, PSBT_OUT_REDEEM_SCRIPT, PSBT_OUT_WITNESS_SCRIPT,
     PSBT_OUT_BIP32_DERIVATION, MAX_PATH_DEPTH
 )
 
@@ -518,7 +519,7 @@ class psbtInputProxy(psbtProxy):
                     'utxo', 'witness_utxo', 'sighash',
                     'redeem_script', 'witness_script', 'fully_signed',
                     'is_segwit', 'is_multisig', 'is_p2sh', 'num_our_keys',
-                    'required_key', 'scriptSig', 'amount', 'scriptCode', 'added_sig')
+                    'required_key', 'scriptSig', 'amount', 'scriptCode', 'added_sig', 'proof_of_ownership')
 
     def __init__(self, fd, idx):
         super().__init__()
@@ -546,6 +547,8 @@ class psbtInputProxy(psbtProxy):
         #self.scriptSig = None
         #self.amount = None
         #self.scriptCode = None      # only expected for segwit inputs
+        #self.proof_of_ownership = None 
+        #self.prevout = None
 
         # after signing, we'll have a signature to add to output PSBT
         #self.added_sig = None
@@ -830,6 +833,8 @@ class psbtInputProxy(psbtProxy):
             self.witness_script = val
         elif kt == PSBT_IN_SIGHASH_TYPE:
             self.sighash = unpack('<I', val)[0]
+        elif kt == PSBT_IN_OWNERSHIP_PROOF:
+            self.proof_of_ownership = val
         else:
             # including: PSBT_IN_FINAL_SCRIPTSIG, PSBT_IN_FINAL_SCRIPTWITNESS
             self.unknown = self.unknown or {}
@@ -867,6 +872,9 @@ class psbtInputProxy(psbtProxy):
         if self.witness_script:
             wr(PSBT_IN_WITNESS_SCRIPT, self.witness_script)
 
+        if self.proof_of_ownership:
+            wr(PSBT_IN_OWNERSHIP_PROOF, self.proof_of_ownership)
+
         if self.unknown:
             for k, v in self.unknown.items():
                 wr(k[0], v, k[1:])
@@ -902,6 +910,7 @@ class psbtObject(psbtProxy):
         self.total_value_out = None
         self.total_value_in = None
         self.presigned_inputs = set()
+        self.commitment_data = None
 
         # when signing segwit stuff, there is some re-use of hashes
         self.hashPrevouts = None
@@ -923,6 +932,8 @@ class psbtObject(psbtProxy):
             # list of tuples(xfp_path, xpub)
             self.xpubs.append( (self.get(val), key[1:]) )
             assert len(self.xpubs) <= MAX_SIGNERS
+        elif kt == PSBT_GLOBAL_OWNERSHIP_COMMITMENT:
+            self.commitment_data = val
         else:
             self.unknown = self.unknown or {}
             if key in self.unknown:
@@ -1067,7 +1078,6 @@ class psbtObject(psbtProxy):
 
         # not multisig, probably
         return None, None
-
 
     async def handle_xpubs(self):
         # Lookup correct wallet based on xpubs in globals
@@ -1454,6 +1464,9 @@ class psbtObject(psbtProxy):
         if self.xpubs:
             for v, k in self.xpubs:
                 wr(PSBT_GLOBAL_XPUB, v, k)
+        
+        if self.commitment_data:
+            wr(PSBT_GLOBAL_OWNERSHIP_COMMITMENT, self.commitment_data)
 
         if self.unknown:
             for k, v in self.unknown.items():
