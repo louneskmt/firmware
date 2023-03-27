@@ -1343,6 +1343,7 @@ class psbtObject(psbtProxy):
             if inp.is_segwit:
                 history.verify_amount(txi.prevout, inp.amount, i)
 
+            inp.prevout = utxo
             del utxo
 
         # XXX scan witness data provided, and consider those ins signed if not multisig?
@@ -1384,6 +1385,37 @@ class psbtObject(psbtProxy):
 
         if MultisigWallet.disable_checks:
             self.warnings.append(('Danger', 'Some multisig checks are disabled.'))
+
+    def validate_ownership(self):
+        invalid = {}
+        if self.commitment_data:
+            commitment_data = self.get(self.commitment_data)
+        else:
+            commitment_data = b''
+        for idx, i in enumerate(self.inputs):
+            if not i.proof_of_ownership:
+                invalid[idx] = "no proof of ownership"
+                continue
+            proof_of_ownership = self.get(i.proof_of_ownership)
+            # contrary to the check that parses subpaths, this is reliable
+            try:
+                is_ours = slip19_check_ownership(proof_of_ownership, i.prevout.scriptPubKey, commitment_data)
+            except Exception as e:
+                invalid[idx] = "invalid proof of ownership: %s" % (e)
+                continue
+
+            # We should already have parsed subpaths, but just in case
+            if i.num_our_keys is None:
+                invalid[idx] = "subpaths were not parsed"
+                continue
+
+            if not is_ours and i.num_our_keys > 0:
+                invalid[idx] = "not ours, but psbt was modified to make us think it is"
+
+            elif is_ours and i.num_our_keys == 0:
+                invalid[idx] = "ours, but psbt was modified to make us think it is not"
+            
+        return invalid
 
     def calculate_fee(self):
         # what miner's reward is included in txn?
