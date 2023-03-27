@@ -1608,7 +1608,7 @@ class psbtObject(psbtProxy):
                     #assert len(result) == 65
                     r = result[1:33]
                     s = result[33:65]
-                    der_sig, _ = ser_sig_der(r, s, inp.sighash)
+                    der_sig, _ = ser_sig_der(result, inp.sighash)
 
                     if len(der_sig) <= 71:
                         # odds of needing retry: just under 50% I think
