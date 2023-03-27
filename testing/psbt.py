@@ -15,6 +15,7 @@ b2a_hex = lambda a: str(_b2a_hex(a), 'ascii')
 #
 PSBT_GLOBAL_UNSIGNED_TX 	= (0)
 PSBT_GLOBAL_XPUB         	= (1)
+PSBT_GLOBAL_OWNERSHIP_COMMITMENT = (7)
 
 PSBT_IN_NON_WITNESS_UTXO 	= (0)
 PSBT_IN_WITNESS_UTXO 	    = (1)
@@ -25,6 +26,7 @@ PSBT_IN_WITNESS_SCRIPT 	    = (5)
 PSBT_IN_BIP32_DERIVATION 	= (6)
 PSBT_IN_FINAL_SCRIPTSIG 	= (7)
 PSBT_IN_FINAL_SCRIPTWITNESS = (8)
+PSBT_IN_OWNERSHIP_PROOF  = (0x19)
 
 PSBT_OUT_REDEEM_SCRIPT 	    = (0)
 PSBT_OUT_WITNESS_SCRIPT 	= (1)
@@ -114,6 +116,7 @@ class BasicPSBTInput(PSBTSection):
         self.witness_script = None
         self.others = {}
         self.unknown = {}
+        self.proof_of_ownership = None
 
     def __eq__(a, b):
         if a.sighash != b.sighash:
@@ -126,6 +129,7 @@ class BasicPSBTInput(PSBTSection):
                 a.witness_script == b.witness_script and \
                 a.my_index == b.my_index and \
                 a.bip32_paths == b.bip32_paths and \
+                a.proof_of_ownership == b.proof_of_ownership and \
                 sorted(a.part_sigs.keys()) == sorted(b.part_sigs.keys()) and \
                 a.unknown == b.unknown
         if rv:
@@ -156,6 +160,9 @@ class BasicPSBTInput(PSBTSection):
         elif kt == PSBT_IN_WITNESS_SCRIPT:
             self.witness_script = val
             assert not key
+        elif kt == PSBT_IN_OWNERSHIP_PROOF:
+            self.proof_of_ownership = val
+            assert not key
         elif kt in ( PSBT_IN_REDEEM_SCRIPT,
                      PSBT_IN_WITNESS_SCRIPT, 
                      PSBT_IN_FINAL_SCRIPTSIG, 
@@ -180,6 +187,8 @@ class BasicPSBTInput(PSBTSection):
             wr(PSBT_IN_SIGHASH_TYPE, struct.pack('<I', self.sighash))
         for k in self.bip32_paths:
             wr(PSBT_IN_BIP32_DERIVATION, self.bip32_paths[k], k)
+        if self.proof_of_ownership:
+            wr(PSBT_IN_OWNERSHIP_PROOF, self.proof_of_ownership)
         for k in self.others:
             wr(k, self.others[k])
         if isinstance(self.unknown, list):
@@ -252,6 +261,7 @@ class BasicPSBT:
         self.outputs = []
 
         self.unknown = {}
+        self.commitment_data = None
 
     def __eq__(a, b):
         return a.txn == b.txn and \
@@ -293,6 +303,8 @@ class BasicPSBT:
                     # key=(xpub) => val=(path)
                     # ignore PSBT_GLOBAL_XPUB on 0th index (should not be part of parsed key)
                     self.xpubs.append((key[1:], val))
+                elif kt == PSBT_GLOBAL_OWNERSHIP_COMMITMENT:
+                    self.commitment_data = val
                 else:
                     self.unknown[key] = val
 
@@ -321,6 +333,9 @@ class BasicPSBT:
 
         for k,v in self.xpubs:
             wr(PSBT_GLOBAL_XPUB, v, key=k)
+
+        if self.commitment_data:
+            wr(PSBT_GLOBAL_OWNERSHIP_COMMITMENT, self.commitment_data)
 
         if isinstance(self.unknown, list):
             # just so I can test duplicate unknown values
