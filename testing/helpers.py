@@ -6,6 +6,9 @@ from binascii import b2a_hex, a2b_hex
 from decimal import Decimal
 import random
 
+def HARD(n=0):
+    return 0x80000000 | n
+
 def B2A(s):
     return str(b2a_hex(s), 'ascii')
     

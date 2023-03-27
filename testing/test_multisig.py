@@ -15,7 +15,7 @@ from psbt import BasicPSBT, BasicPSBTInput, BasicPSBTOutput, PSBT_IN_REDEEM_SCRI
 from ckcc.protocol import CCProtocolPacker, CCProtoError, MAX_TXN_LEN, CCUserRefused
 from pprint import pprint, pformat
 from base64 import b64encode, b64decode
-from helpers import B2A, U2SAT, prandom, fake_dest_addr, swab32, xfp2str, parse_change_back
+from helpers import HARD, B2A, U2SAT, prandom, fake_dest_addr, swab32, xfp2str, parse_change_back
 from helpers import path_to_str, str_to_path, slip132undo
 from struct import unpack, pack
 from constants import *
@@ -23,9 +23,6 @@ from pycoin.key.BIP32Node import BIP32Node
 from io import BytesIO
 from hashlib import sha256
 from authproxy import JSONRPCException
-
-def HARD(n=0):
-    return 0x80000000 | n
 
 def str2ipath(s):
     # convert text to numeric path for BIP-174
