@@ -380,6 +380,9 @@ class ApprovalRule:
 
         # check the self-transfer percentage
         if self.min_pct_self_transfer:
+            invalid = psbt.validate_ownership()
+            assert len(invalid) == 0, 'does not meet self transfer threshold, invalid proof of ownership for inputs: \n' + '\n'.join(["#%d: %s" % (k, v) for k,v in invalid.items()])
+
             own_in_value = sum([i.amount for i in psbt.inputs if i.num_our_keys])
             own_out_value = sum([o.amount for o in psbt.outputs if o.num_our_keys])
             percentage = (float(own_out_value) / own_in_value) * 100.0
