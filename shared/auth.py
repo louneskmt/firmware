@@ -7,7 +7,7 @@ import stash, ure, ux, chains, sys, gc, uio, version, ngu
 from ubinascii import b2a_base64
 from public_constants import MSG_SIGNING_MAX_LENGTH, SUPPORTED_ADDR_FORMATS
 from public_constants import AFC_SCRIPT, AF_CLASSIC, AFC_BECH32
-from public_constants import STXN_FLAGS_MASK, STXN_FINALIZE, STXN_VISUALIZE, STXN_SIGNED
+from public_constants import STXN_FLAGS_MASK, STXN_FINALIZE, STXN_VISUALIZE, STXN_SIGNED, SPOW_USER_CONFIRMATION
 from sffile import SFFile
 from ux import ux_aborted, ux_show_story, abort_and_goto, ux_dramatic_pause, ux_clear_keys
 from ux import show_qr_code
@@ -330,6 +330,63 @@ def sign_txt_file(filename):
     except AssertionError as exc:
         await ux_show_story("Problem: %s\n\nMessage to be signed must be a single line of ASCII text." % exc)
         return
+
+class ProduceProofOfOwnership(UserAuthorizedAction):
+    def __init__(self, path, addr_fmt, commitment_data, flags):
+        super().__init__()
+        self.path = cleanup_deriv_path(path)
+        self.addr_fmt = parse_addr_fmt_str(addr_fmt)
+        self.commitment_data = commitment_data
+        self.user_confirmation = bool(flags & SPOW_USER_CONFIRMATION)
+        self.result = None # will be (proof, scriptPubKey)
+        self.chain = chains.current_chain()
+
+    async def interact(self):
+        # Prompt user w/ details and get approval
+        from glob import dis, hsm_active
+
+        if hsm_active:
+            ch = await hsm_active.approve_produce_proof_of_ownership()
+        else:
+            msg = '\n\nCreating proof of ownership for path %s\n\n' % self.path
+
+            while 1:
+                ch = await ux_show_story(msg, title=self.title)
+                break
+
+        if ch != 'y':
+            # they don't want to!
+            self.refused = True
+        else:
+            self.proof_of_ownership_protocol()
+        
+        print(self.result)
+
+        self.done()
+
+    def proof_of_ownership_protocol(self):
+        import ownership 
+        with stash.SensitiveValues() as sv:
+            ownership_key = ownership.slip19_ownership_key()
+            node = sv.derive_path(self.path)
+            pubkey = node.pubkey()
+            spk = self.chain.pubkey_to_scriptPubKey(pubkey, self.addr_fmt)
+            own_id = ownership.slip19_ownership_id(ownership_key, spk)
+            proof_body = ownership.slip19_serialize_body([own_id], self.user_confirmation)
+            proof_footer = ownership.slip19_serialize_footer(spk, self.commitment_data)
+            sig = ownership.slip19_signing_protocol(node, proof_body, proof_footer)
+            proof_sig = ownership.slip19_produce_proof(node, sig, self.addr_fmt)
+
+            stash.blank_object(node)
+
+            self.result = (proof_body + proof_sig, spk)
+    
+def produce_proof_of_ownership(path, addr_fmt, commitment_data, flags):
+    path = cleanup_deriv_path(path)
+    UserAuthorizedAction.check_busy()
+    UserAuthorizedAction.active_request = ProduceProofOfOwnership(path, addr_fmt, commitment_data, flags)
+    # kill any menu stack, and put our thing at the top
+    abort_and_goto(UserAuthorizedAction.active_request)
 
 
 class ApproveTransaction(UserAuthorizedAction):
