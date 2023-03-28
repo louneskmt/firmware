@@ -56,6 +56,7 @@ HSM_WHITELIST = frozenset({
     'p2sh', 'show',             # limited by HSM policy
     'user',                     # auth HSM user, other user cmds not allowed
     'gslr',                     # read storage locker; hsm mode only, limited usage
+    'spow', 'pook',                    # proof of ownership
 })
 
 # HSM related commands that are not allowed if 'hsmcmd' is disabled.
@@ -431,6 +432,19 @@ class USBHandler:
             sign_msg(msg, subpath, addr_fmt)
             return None
 
+        if cmd == 'spow':
+            # produce a proof of ownership
+            addr_fmt, flags, len_path, len_commitment_data = unpack_from('<IIII', args)
+            path = args[16:16+len_path]
+            commitment_data = args[16+len_path:]
+
+            assert len(path) == len_path, "Bad length for path"
+            assert len(commitment_data) == len_commitment_data, "Bad length for commitment_data"
+
+            from auth import produce_proof_of_ownership
+            produce_proof_of_ownership(path, addr_fmt, commitment_data, flags)
+            return None
+
         if cmd == 'p2sh':
             # show P2SH (probably multisig) address on screen (also provides it back)
             # - must provide redeem script, and list of [xfp+path]
@@ -505,7 +519,7 @@ class USBHandler:
             sign_transaction(txn_len, (flags & STXN_FLAGS_MASK), txn_sha)
             return None
 
-        if cmd == 'stok' or cmd == 'bkok' or cmd == 'smok' or cmd == 'pwok':
+        if cmd in ['stok', 'bkok', 'smok', 'pwok', 'pook']:
             # Have we finished (whatever) the transaction,
             # which needed user approval? If so, provide result.
             from auth import UserAuthorizedAction
@@ -538,6 +552,11 @@ class USBHandler:
                 addr, sig = req.address, req.result
                 UserAuthorizedAction.cleanup()
                 return pack('<4sI', 'smrx', len(addr)) + addr.encode() + sig
+            if cmd == 'pook':
+                # return proof of ownership
+                proof_of_ownership, spk = req.result
+                UserAuthorizedAction.cleanup()
+                return pack('<4sII', 'sprx', len(proof_of_ownership), len(spk)) + proof_of_ownership + spk
             else:
                 # generic file response
                 resp_len, sha = req.result
