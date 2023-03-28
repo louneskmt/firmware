@@ -770,6 +770,9 @@ class HSMPolicy:
 
         self.pending_auth[username] = (token, totp_time)
 
+    async def approve_produce_proof_of_ownership(self):
+        return 'y'
+
     async def approve_msg_sign(self, msg_text, address, subpath):
         # Maybe approve indicated message to be signed.
         # return 'y' or 'x'
