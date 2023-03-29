@@ -493,6 +493,28 @@ def attempt_psbt(hsm_status, start_sign, dev):
     return doit
 
 @pytest.fixture
+def attempt_proof_of_ownership(dev, hsm_status):
+    def doit(path, addr_fmt, commitment_data, user_confirmation, refuse=None, remote_error=None):
+        dev.send_recv(CCProtocolPacker.produce_proof_of_ownership(path, addr_fmt, commitment_data, user_confirmation), timeout=None)
+
+        try:
+            done = None
+            while done == None:
+                time.sleep(0.050)
+                done = dev.send_recv(CCProtocolPacker.get_proof_of_ownership(), timeout=None)
+
+            assert len(done) == 2
+            assert refuse == None, "proof of ownership production didn't fail as expected"
+
+            return done
+        except CCUserRefused:
+            msg = hsm_status().last_refusal
+            assert refuse != None, "should not have been refused: " + msg
+            assert refuse in msg
+
+    return doit
+
+@pytest.fixture
 def attempt_msg_sign(dev, hsm_status):
     def doit(refuse, *args, **kws):
         tt = kws.pop('timeout', None)
@@ -749,6 +771,30 @@ def test_big_txn(num_in, num_out, dev, quick_start_hsm, hsm_status, is_simulator
     for count in range(20):
         psbt = fake_txn(num_in, num_out, dev.master_xpub)
         attempt_psbt(psbt)
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ((AF_P2WPKH, "m/84'/0'/0'/1/0", b'', False, ""), ("534c00190001a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad57070002483045022100c0dc28bb563fc5fea76cacff75dba9cb4122412faae01937cdebccfb065f9a7002202e980bfbd8a434a7fc4cd2ca49da476ce98ca097437f8159b1a386b41fcdfac50121032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b", "0014b2f771c370ccf219cd3059cda92bdf7f00cf2103")),
+        ((AF_P2WPKH_P2SH, "m/49'/0'/0'/1/0", b'TREZOR', True, ""), ("534c0019010192caf0b8daf78f1d388dbbceaec34bd2dabc31b217e32343663667f6694a3f4617160014e0cffbee1925a411844f44c3b8d81365ab51d0360247304402207f1003c59661ddf564af2e10d19ad8d6a1a47ad30e7052197d95fd65d186a67802205f0a804509980fec1b063554aadd8fb871d7c9fe934087cba2da09cbeff8531c012103a961687895a78da9aef98eed8e1f2a3e91cfb69d2f3cf11cbd0bb1773d951928", "a914b9ddc52a7d95ad46d474bfc7186d0150e15a499187")),
+        ((AF_CLASSIC, "m/44'/0'/0'/1/0", b'', False, "TREZOR"), ("534c00190001ccc49ac5fede0efc80725fbda8b763d4e62a221c51cc5425076cffa7722c0bda6b483045022100e818002d0a85438a7f2140503a6aa0a6af6002fa956d0101fd3db24e776e546f0220430fd59dc1498bc96ab6e71a4829b60224828cf1fc35edc98e0973db203ca3f0012102f63159e21fbcb54221ec993def967ad2183a9c243c8bff6e7d60f4d5ed3b386500", "76a9145a4deff88ada6705ed70835bc0db56a124b9cdcd88ac")),
+    ]
+)
+def test_produce_proof_of_ownership(set_bip39_pw, quick_start_hsm, attempt_proof_of_ownership, args):
+    inputs, results = args
+    addr_fmt, path, commitment_data, user_confirmation, bip39_pw = inputs
+    proof_target, spk_target = results
+
+    # reset the passphrase, and restart hsm
+    xfp = set_bip39_pw(bip39_pw, False)
+
+    policy = {'warnings_ok': True, 'rules': [{}]}
+    quick_start_hsm(policy)
+
+    proof, spk = attempt_proof_of_ownership(path, addr_fmt, commitment_data, user_confirmation)
+
+    assert proof == a2b_hex(proof_target)
+    assert spk == a2b_hex(spk_target)
 
 
 def test_sign_msg_good(quick_start_hsm, change_hsm, attempt_msg_sign, addr_fmt=AF_CLASSIC):
