@@ -60,15 +60,15 @@ def fake_txn(dev):
     from pycoin.tx.TxIn import TxIn
     from pycoin.tx.TxOut import TxOut
     from struct import pack
+    from ckcc_protocol.protocol import CCProtocolPacker
+    from helpers import HARD, path_to_str
 
-    def doit(num_ins, num_outs, master_xpub=None, subpath="0/%d", fee=10000,
-                invals=None, outvals=None, segwit_in=False, outstyles=['p2pkh'], psbt_hacker=None,
-                change_outputs=[], capture_scripts=None, add_xpub=None, op_return=None):
+    def doit(num_ins, num_outs, master_xpub=None, subpath=[0], fee=10000,
+                invals=None, outvals=None, instyles=['p2pkh'], outstyles=['p2pkh'], psbt_hacker=None,
+                change_outputs=[], capture_scripts=None, add_xpub=None, op_return=None, commitment_data=None, ownership_proofs=[]):
         psbt = BasicPSBT()
         txn = Tx(2,[],[])
         master_xpub = master_xpub or dev.master_xpub or simulator_fixed_xprv
-        
-        # we have a key; use it to provide "plausible" value inputs
         mk = BIP32Node.from_wallet_key(master_xpub)
         xfp = mk.fingerprint()
 
@@ -79,23 +79,39 @@ def fake_txn(dev):
             # make a fake txn to supply each of the inputs
             # - each input is 1BTC
 
+            style = instyles[i % len(instyles)]
+            if style == "p2pkh":
+                child_xpub = dev.send_recv(CCProtocolPacker.get_xpub("m/44h/0h/0h"))
+            elif style == 'p2wpkh':
+                child_xpub = dev.send_recv(CCProtocolPacker.get_xpub("m/84h/0h/0h"))
+            
+            mk = BIP32Node.from_wallet_key(child_xpub)
+
             # addr where the fake money will be stored.
-            subkey = mk.subkey_for_path(subpath % i)
+            subkey = mk.subkey_for_path(path_to_str(subpath + [i], '', 0))
             sec = subkey.sec()
             assert len(sec) == 33, "expect compressed"
-            assert subpath[0:2] == '0/'
 
-            psbt.inputs[i].bip32_paths[sec] = xfp + pack('<II', 0, i)
+            if style == 'p2pkh':
+                psbt.inputs[i].bip32_paths[sec] = xfp + pack('<IIIII', HARD(44), HARD(0), HARD(0), subpath[0], i)
+                scr = bytes([0x76, 0xa9, 0x14]) + subkey.hash160() + bytes([0x88, 0xac])
+            elif style == 'p2wpkh':
+                psbt.inputs[i].bip32_paths[sec] = xfp + pack('<IIIII', HARD(84), HARD(0), HARD(0), subpath[0], i)
+                scr = bytes([0x00, 0x14]) + subkey.hash160()
+
+            try:
+                psbt.inputs[i].proof_of_ownership = ownership_proofs[i]
+            except IndexError:
+                pass
+                
 
             # UTXO that provides the funding for to-be-signed txn
             supply = Tx(2,[TxIn(pack('4Q', 0xdead, 0xbeef, 0, 0), 73)],[])
 
-            scr = bytes([0x76, 0xa9, 0x14]) + subkey.hash160() + bytes([0x88, 0xac])
-
             supply.txs_out.append(TxOut(1E8 if not invals else invals[i], scr))
 
             with BytesIO() as fd:
-                if not segwit_in:
+                if style in ['p2pkh', 'p2wpkh-p2sh']:
                     supply.stream(fd)
                     psbt.inputs[i].utxo = fd.getvalue()
                 else:
@@ -107,6 +123,7 @@ def fake_txn(dev):
 
 
         for i in range(num_outs):
+            mk = BIP32Node.from_wallet_key(master_xpub)
             # random P2PKH
             if not outstyles:
                 style = ADDR_STYLES[i % len(ADDR_STYLES)]
@@ -156,6 +173,9 @@ def fake_txn(dev):
         with BytesIO() as b:
             txn.stream(b)
             psbt.txn = b.getvalue()
+
+        if commitment_data:
+            psbt.commitment_data = commitment_data
 
         if add_xpub:
             # some people want extra xpub data in their PSBTs
