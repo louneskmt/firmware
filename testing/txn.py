@@ -59,6 +59,7 @@ def fake_txn(dev):
     from pycoin.tx.Tx import Tx
     from pycoin.tx.TxIn import TxIn
     from pycoin.tx.TxOut import TxOut
+    from pycoin.encoding import hash160
     from struct import pack
     from ckcc_protocol.protocol import CCProtocolPacker
     from helpers import HARD, path_to_str
@@ -84,6 +85,10 @@ def fake_txn(dev):
                 child_xpub = dev.send_recv(CCProtocolPacker.get_xpub("m/44h/0h/0h"))
             elif style == 'p2wpkh':
                 child_xpub = dev.send_recv(CCProtocolPacker.get_xpub("m/84h/0h/0h"))
+            elif style == 'p2wpkh-p2sh':
+                child_xpub = dev.send_recv(CCProtocolPacker.get_xpub("m/49h/0h/0h"))
+            else:
+                raise ValueError("Unknown style")
             
             mk = BIP32Node.from_wallet_key(child_xpub)
 
@@ -98,6 +103,13 @@ def fake_txn(dev):
             elif style == 'p2wpkh':
                 psbt.inputs[i].bip32_paths[sec] = xfp + pack('<IIIII', HARD(84), HARD(0), HARD(0), subpath[0], i)
                 scr = bytes([0x00, 0x14]) + subkey.hash160()
+            elif style == 'p2wpkh-p2sh':
+                psbt.inputs[i].bip32_paths[sec] = xfp + pack('<IIIII', HARD(49), HARD(0), HARD(0), subpath[0], i)
+                witness_script = bytes([0x00, 0x14]) + subkey.hash160()
+                psbt.inputs[i].redeem_script = witness_script
+                scr = bytes([0xa9, 0x14]) + hash160(witness_script) + bytes([0x87])
+            else:
+                raise ValueError("Unknown style")
 
             try:
                 psbt.inputs[i].proof_of_ownership = ownership_proofs[i]

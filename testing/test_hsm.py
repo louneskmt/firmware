@@ -1160,8 +1160,10 @@ def test_velocity(dev, start_hsm, fake_txn, attempt_psbt, fast_forward, hsm_stat
 @pytest.mark.parametrize(
     "args",
     [
-        ("p2wpkh", "all all all all all all all all all all all all", "", "", "534c00190001a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad57070002483045022100c0dc28bb563fc5fea76cacff75dba9cb4122412faae01937cdebccfb065f9a7002202e980bfbd8a434a7fc4cd2ca49da476ce98ca097437f8159b1a386b41fcdfac50121032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b"),
-        ("p2pkh", "all all all all all all all all all all all all", "TREZOR", "", "534c00190001ccc49ac5fede0efc80725fbda8b763d4e62a221c51cc5425076cffa7722c0bda6b483045022100e818002d0a85438a7f2140503a6aa0a6af6002fa956d0101fd3db24e776e546f0220430fd59dc1498bc96ab6e71a4829b60224828cf1fc35edc98e0973db203ca3f0012102f63159e21fbcb54221ec993def967ad2183a9c243c8bff6e7d60f4d5ed3b386500"),
+        ("p2wpkh", "all all all all all all all all all all all all", "", b"", "534c00190001a122407efc198211c81af4450f40b235d54775efd934d16b9e31c6ce9bad57070002483045022100c0dc28bb563fc5fea76cacff75dba9cb4122412faae01937cdebccfb065f9a7002202e980bfbd8a434a7fc4cd2ca49da476ce98ca097437f8159b1a386b41fcdfac50121032ef68318c8f6aaa0adec0199c69901f0db7d3485eb38d9ad235221dc3d61154b"),
+        ("p2pkh", "all all all all all all all all all all all all", "TREZOR", b"", "534c00190001ccc49ac5fede0efc80725fbda8b763d4e62a221c51cc5425076cffa7722c0bda6b483045022100e818002d0a85438a7f2140503a6aa0a6af6002fa956d0101fd3db24e776e546f0220430fd59dc1498bc96ab6e71a4829b60224828cf1fc35edc98e0973db203ca3f0012102f63159e21fbcb54221ec993def967ad2183a9c243c8bff6e7d60f4d5ed3b386500"),
+        ("p2wpkh-p2sh", "all all all all all all all all all all all all", "", b"TREZOR", "534c0019010192caf0b8daf78f1d388dbbceaec34bd2dabc31b217e32343663667f6694a3f4617160014e0cffbee1925a411844f44c3b8d81365ab51d0360247304402207f1003c59661ddf564af2e10d19ad8d6a1a47ad30e7052197d95fd65d186a67802205f0a804509980fec1b063554aadd8fb871d7c9fe934087cba2da09cbeff8531c012103a961687895a78da9aef98eed8e1f2a3e91cfb69d2f3cf11cbd0bb1773d951928"
+),
     ]
 )
 def test_min_pct_self_transfer(args, set_seed_words, set_bip39_pw, quick_start_hsm, fake_txn, attempt_psbt):
@@ -1175,16 +1177,16 @@ def test_min_pct_self_transfer(args, set_seed_words, set_bip39_pw, quick_start_h
     quick_start_hsm(policy)
 
     # Same tests than before, with a valid ownership proof
-    psbt = fake_txn(1, 2, invals = [1000], outvals = [500, 500], change_outputs = [], fee = 0, commitment_data=a2b_hex(commitment_data), ownership_proofs=[a2b_hex(proof)], outstyles=[style], instyles=[style], subpath=[1])
+    psbt = fake_txn(1, 2, invals = [1000], outvals = [500, 500], change_outputs = [], fee = 0, commitment_data=commitment_data, ownership_proofs=[a2b_hex(proof)], outstyles=[style], instyles=[style], subpath=[1])
     attempt_psbt(psbt, 'does not meet self transfer threshold, expected: %.2f, actual: %.2f' % (75, 0))
 
-    psbt = fake_txn(1, 2, invals = [1000], outvals = [750, 250], change_outputs = [1], fee = 0, commitment_data=a2b_hex(commitment_data), ownership_proofs=[a2b_hex(proof)], outstyles=[style], instyles=[style], subpath=[1])
+    psbt = fake_txn(1, 2, invals = [1000], outvals = [750, 250], change_outputs = [1], fee = 0, commitment_data=commitment_data, ownership_proofs=[a2b_hex(proof)], outstyles=[style], instyles=[style], subpath=[1])
     attempt_psbt(psbt, 'does not meet self transfer threshold, expected: %.2f, actual: %.2f' % (75, 25))
 
-    psbt = fake_txn(1, 2, invals = [1000], outvals = [250, 750], change_outputs = [1], fee = 0, commitment_data=a2b_hex(commitment_data), ownership_proofs=[a2b_hex(proof)], outstyles=[style], instyles=[style], subpath=[1])
+    psbt = fake_txn(1, 2, invals = [1000], outvals = [250, 750], change_outputs = [1], fee = 0, commitment_data=commitment_data, ownership_proofs=[a2b_hex(proof)], outstyles=[style], instyles=[style], subpath=[1])
     attempt_psbt(psbt) # exact threshold
 
-    psbt = fake_txn(1, 2, invals = [1000], outvals = [1, 999], change_outputs = [1], fee = 0, commitment_data=a2b_hex(commitment_data), ownership_proofs=[a2b_hex(proof)], outstyles=[style], instyles=[style], subpath=[1])
+    psbt = fake_txn(1, 2, invals = [1000], outvals = [1, 999], change_outputs = [1], fee = 0, commitment_data=commitment_data, ownership_proofs=[a2b_hex(proof)], outstyles=[style], instyles=[style], subpath=[1])
     attempt_psbt(psbt) # exceeding the threshold
 
     # Now modifying the ownership proof to make it invalid
