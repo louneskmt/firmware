@@ -1187,6 +1187,15 @@ def test_min_pct_self_transfer(args, set_seed_words, set_bip39_pw, quick_start_h
     psbt = fake_txn(1, 2, invals = [1000], outvals = [1, 999], change_outputs = [1], fee = 0, commitment_data=a2b_hex(commitment_data), ownership_proofs=[a2b_hex(proof)], outstyles=[style], instyles=[style], subpath=[1])
     attempt_psbt(psbt) # exceeding the threshold
 
+    # Now modifying the ownership proof to make it invalid
+    proof = bytearray(a2b_hex(proof))
+    proof[len(proof)//2] ^= 0x01
+
+    false_proof_psbt = BasicPSBT()
+    false_proof_psbt.parse(psbt)
+    false_proof_psbt.inputs[0].proof_of_ownership = proof
+    attempt_psbt(false_proof_psbt.as_bytes(), "invalid signature") # Won't sign the psbt even if it's actually valid because we can't verify the ownership proof
+    
 @pytest.mark.parametrize('pattern', ['EQ_NUM_INS_OUTS', 'EQ_NUM_OWN_INS_OUTS', 'EQ_OUT_AMOUNTS'] )
 def test_patterns(pattern, dev, start_hsm, fake_txn, attempt_psbt):
     policy = DICT(rules=[dict(patterns=[pattern])])
