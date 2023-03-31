@@ -14,12 +14,14 @@ tn = chains.BitcoinTestnet
 
 if 1:
     stash.bip39_passphrase = ''
+    is_hsm = settings.get('hsmcmd', 0)
     settings.current = sim_defaults
     settings.overrides.clear()
     settings.set('chain', 'XTN')
     settings.set('words', True)
     settings.set('terms_ok', True)
     settings.set('idle_to', 0)
+    settings.set('hsmcmd', is_hsm)
 
     import main
     pa.tmp_value = None
