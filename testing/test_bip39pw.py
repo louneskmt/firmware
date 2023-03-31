@@ -106,6 +106,8 @@ def set_bip39_pw(dev, need_keypress, get_secrets, reset_seed_words, cap_story):
 
         xfp, = struct.unpack('I', expect.fingerprint())
 
+        dev.start_encryption()
+
         return xfp
 
     return doit
